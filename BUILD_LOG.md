@@ -74,3 +74,10 @@
 - **Deviation (D43):** ECDSA P-256 instead of Ed25519, because Ed25519 is missing on JDK 11.
 - Tests: 5 claims in `ModelVerifierTest` (tampered model, last-good kept after bad update, downgrade, unsigned, valid accepted). All pass.
 - **Not done:** the online sync itself (only verified offline at load, as the spec says), and key storage. Keys are generated in tests only; no key is committed.
+
+## #29 guidance keys, EN/FR/AR (22 Oct 2026)
+- `GuidanceKeys` + `src/main/resources/guidance/messages_{en,fr,ar}.properties`. The English texts for the PDF examples are copied exactly (test checks them).
+- Every ErrorState has a key; every challenge has a `spoken.` twin (PDF: spoken prompts).
+- Tests: 5 claims in `GuidanceKeysTest`. All pass.
+- **Not verified:** FR and AR are translations written here, **not checked by a native speaker**. The files say so in their header. Review before any public or judged use.
+- `ErrorState.POOR_QUALITY` maps to the "dark" key by default. The tracker's reason (too_small / dark / blurry) must choose the key; that wiring is #34.
