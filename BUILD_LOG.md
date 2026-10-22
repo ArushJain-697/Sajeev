@@ -146,3 +146,10 @@
 - `FrameEdgeVoter`: Sobel edges; a side counts as a line when a row or column has enough strong edges over the face span; ATTACK when all four sides enclose the face; ABSTAIN when the face fills more than 80% of the frame.
 - Tests (3, SYNTHETIC drawn bezel on a grey scene): bezel → ATTACK; plain background → LIVE; face fills frame → ABSTAIN.
 - **Not done / limits:** only axis-aligned edges (a tilted phone is missed). A real office scene with shelves or a doorframe is not tested, so false ATTACK votes are possible. The real "held phone" fixture is needed (#59). Thresholds are TARGET values.
+
+## #19 V2 moiré voter (22 Oct 2026): DONE, with limits
+- Change from the open problem above: the isolation test now compares each bin with the **median** of its 9x9 neighbourhood (ratio 8), and only counts bins at radius >= 8 from DC. The old neighbour-mean test failed because a Hann-windowed sinusoid leaks into its neighbours.
+- Result on the two fixtures we have: clean face crop share 0.0; synthetic grating share 0.38–0.75 (Python prototype, same method in Java).
+- `MoireVoter`: ATTACK when at least 2 of the last 3 frames have share >= 0.20; ABSTAIN when the face crop is under 96 px or fewer than 2 frames are usable.
+- Tests (3): synthetic moiré → share above 0.20; clean crop → below 0.20; minimum crop size 96 px.
+- **Limits:** validated on one photo and one synthetic pattern only. The 0.20 limit is TARGET and must be tuned on real attack clips (DEV, #62). The voter-level frame counting is not yet covered by a test (it needs the detector).

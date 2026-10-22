@@ -14,7 +14,15 @@ public final class MoireMeasure {
     /** Bins within this radius of the DC term are excluded. */
     static final int DC_RADIUS = 3;
     /** A bin is an isolated peak when it exceeds this multiple of its 8 neighbours' mean. */
-    static final double PEAK_RATIO = 4.0;
+    static final double PEAK_RATIO = 8.0;
+    /** Peaks closer than this to DC are not counted as moiré (low-frequency face structure). */
+    static final int PEAK_MIN_RADIUS = 8;
+
+    private static int radius(int x, int y) {
+        int dy = Math.min(y, N - y);
+        int dx = Math.min(x, N - x);
+        return (int) Math.round(Math.sqrt(dx * dx + dy * dy));
+    }
 
     private MoireMeasure() {
     }
@@ -56,28 +64,27 @@ public final class MoireMeasure {
         if (total <= 0.0) {
             return 0.0;
         }
+        // A bin is an isolated peak when it is more than PEAK_RATIO times the median of its 9x9 neighbourhood.
+        // A Hann-windowed sinusoid spreads into nearby bins, so a plain neighbour mean is not enough; the median is.
         double peaks = 0.0;
-        for (int y = 1; y < N - 1; y++) {
-            for (int x = 1; x < N - 1; x++) {
+        double[] window = new double[81];
+        for (int y = 0; y < N; y++) {
+            for (int x = 0; x < N; x++) {
                 double v = p[y * N + x];
-                if (v <= 0.0) {
+                if (v <= 0.0 || radius(x, y) < PEAK_MIN_RADIUS) {
                     continue;
                 }
-                // ring of bins 3..4 away (a Hann-windowed sinusoid leaks into the 8 nearest bins)
-                double nb = 0.0;
-                int cnt = 0;
+                int n = 0;
                 for (int dy = -4; dy <= 4; dy++) {
                     for (int dx = -4; dx <= 4; dx++) {
-                        int yy = y + dy;
-                        int xx = x + dx;
-                        if (Math.max(Math.abs(dx), Math.abs(dy)) < 3 || yy < 0 || yy >= N || xx < 0 || xx >= N) {
-                            continue;
-                        }
-                        nb += p[yy * N + xx];
-                        cnt++;
+                        int yy = (y + dy + N) % N;
+                        int xx = (x + dx + N) % N;
+                        window[n++] = p[yy * N + xx];
                     }
                 }
-                if (cnt > 0 && v > PEAK_RATIO * (nb / cnt)) {
+                java.util.Arrays.sort(window, 0, n);
+                double med = window[n / 2];
+                if (v > PEAK_RATIO * med) {
                     peaks += v;
                 }
             }
