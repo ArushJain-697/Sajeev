@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- #01. UNTESTED. Dependencies (ONNX Runtime, EJML, JTransforms, JUnit 5, jqwik) are added by the owning tickets. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.sajeev</groupId><artifactId>sajeev-parent</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>eval</artifactId>
+</project>
