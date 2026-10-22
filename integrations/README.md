@@ -21,3 +21,7 @@ Not yet pinned: the `develop` line (failed, #05), `android-registration-client` 
 
 `integrations/feedprobe/` is a tiny test app (`io.sajeev.feedprobe`) that binds to the feed and logs what it receives. Test tooling only. Run `eval/rig/test_feed.sh`.
 
+| 0004-mockmds-replay-fps-mockflag.patch | mosip-mock-services `master` @ the commit in `upstream/` (MockMDS module), `a/MockMDS/src` paths | #37 | Face stream replays JPEG frames from `-Dsajeev.replay.dir=<folder>` at `-Dsajeev.replay.fps=<1..60>` (deadline-scheduled); discovery responses carry `"mock": true`. Off by default: without the properties the stream is the upstream behaviour. |
+
+Run the patched MockMDS (from a Maven-packaged build copy): `java -Dsajeev.replay.dir=<folder> -Dsajeev.replay.fps=15 -cp "target/classes:<classpath>" io.mosip.mock.sbi.test.TestMockSBI "mosip.mock.sbi.device.purpose=Registration" "mosip.mock.sbi.biometric.type=Biometric Device"`. Measure with `python3 eval/rig/check_mockmds_fps.py`. A webcam source is possible by writing JPEGs into the replay folder with ffmpeg; it is not scripted yet.
+

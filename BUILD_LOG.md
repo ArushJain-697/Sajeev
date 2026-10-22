@@ -243,3 +243,11 @@
 - `PERIODIC` frame mode already exists in FrameGuard (#15).
 - Tests (7, pass): `test_accelerator_disabled_when_output_differs` (uses the CoreML 0.00706 result from #10), `test_load_shedding_never_skips_pad_voters` (grid of 2 x 5 x 21 loads), plus AUTO without evidence, one failing record disables, CPU setting wins, overload ladder.
 - **Limits:** this is policy and not yet wired to ONNX Runtime session creation (that comes with #34). The load thresholds (1.0 and 2.5 times the frame interval) are TARGET values. No real overload was measured. The strict gate's exact settings are chosen by the policy engine (#28).
+
+## #37 MockMDS fork (desktop): replay + configurable fps + mock flag (23 Oct 2026): MOSTLY DONE
+- Patch `integrations/patches/0004-mockmds-replay-fps-mockflag.patch` (3 source files changed, 1 new class `SajeevReplay`; 151 lines; line endings kept as CRLF like upstream; `git apply --check` passes against the upstream clone). Built and run from a copy in `tools-local/build/mockmds`; the upstream clone is unchanged.
+- Measured with `eval/rig/check_mockmds_fps.py` on a patched run (stream read over 6 s): configured 3 / 10 / 15 / 30 fps → measured **3.0 / 9.99 / 15.14 / 30.26** (all within 1%). The first version used a fixed sleep and was 1.3%, 4.8%, 9.7% and 11.7% too slow; deadline scheduling fixed it.
+- `mock: true` is present on every device in the discovery response (face, finger, iris).
+- Upstream default kept: without the properties the stream runs as before (about 27–30 fps in this setup) and the four #35 contract tests still pass.
+- Replay frames really come from the folder (frame sizes 7.2–7.3 KB vs the stock 39.5 KB frame).
+- **Not done:** (1) `rCapture` returning the latest replayed frame as an ISO 19794-5 record (the mock's helper only converts JPEG 2000 input, so JPEG frames need a JP2 conversion first); (2) a scripted webcam source (can be done by writing JPEGs into the replay folder); (3) an L1 profile (devices still report L0). The test `test_mock_rcapture_is_valid_iso_19794_5` is therefore only covered for the stock record (#35), not for replayed frames.
