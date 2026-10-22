@@ -8,6 +8,8 @@ Apache License 2.0 components (notice required):
 - MiniFASNet code, Silent-Face-Anti-Spoofing, Copyright Minivision.
 - EJML (planned), Copyright Peter Abeles.
 
+Apache License 2.0 also: SFace (OpenCV Zoo), the Binding embedding model.
+
 MIT License components:
 - ONNX Runtime, Copyright Microsoft Corporation.
 - YuNet face detector, Copyright (c) 2020 Shiqi Yu.
