@@ -224,3 +224,7 @@
 - Tests (4, pure model, pass): every error state renders a message in all three languages; all 14 UX screens have text in every language; the PAD failure screen shows no detail; every screen has a text badge.
 - Screenshots: `ScreenshotMain` renders UX1–UX14 with JavaFX snapshots. 42 PNGs (14 per language, en, fr, ar) in `docs/UIUX/desktop/`. Checked by eye: UX8, UX9, UX13 in English and UX9 in Arabic (right-to-left, correct glyphs). A first render had left-aligned messages; fixed with `alignment="CENTER"`.
 - **Limits:** it is a standalone pane, not yet inside the registration client (needs #42–#44 and a JavaFX 11 recompile). Diagnostic panel behind config is not built. No live preview image (the oval is a placeholder). The spoken prompt is a key, not audio. The headless TestFX test named in the spec was not used: the model tests cover the claim, and the snapshot tool needs a display (it ran on this Mac's session).
+
+## #11 Mac camera: attempted again 23 Oct, still pending Arush (23 Oct 2026)
+- `ffmpeg -f avfoundation` now lists modes for the MacBook Air camera (640x480 at 30 fps), but the capture command hangs waiting for frames. A macOS camera permission prompt for the terminal app is the likely cause. No frames were stored, and no file was kept.
+- To finish #11: allow Camera for the app that runs the terminal (System Settings > Privacy & Security > Camera), then run a 3-second timing test. Consent for any recording of a person stays under #59.
