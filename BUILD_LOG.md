@@ -251,3 +251,14 @@
 - Upstream default kept: without the properties the stream runs as before (about 27–30 fps in this setup) and the four #35 contract tests still pass.
 - Replay frames really come from the folder (frame sizes 7.2–7.3 KB vs the stock 39.5 KB frame).
 - **Not done:** (1) `rCapture` returning the latest replayed frame as an ISO 19794-5 record (the mock's helper only converts JPEG 2000 input, so JPEG frames need a JP2 conversion first); (2) a scripted webcam source (can be done by writing JPEGs into the replay folder); (3) an L1 profile (devices still report L0). The test `test_mock_rcapture_is_valid_iso_19794_5` is therefore only covered for the stock record (#35), not for replayed frames.
+
+## #39 interoperability harness (23 Oct 2026): PART (a) DONE, part (b) NOT DONE
+- New module `interop`, independent of the liveness engine (Jackson and plain sockets only). Checks for a face device over HTTP SBI: discovery (Face device, L0 or L1, decodable digital ID), info (signed deviceInfo token), stream rate (PDF minimum 3 fps), rCapture (no error, signed token with a signature part, ISO 19794-5 `FAC` record) and digital ID fields. Parsing checks work on recorded bytes too.
+- Runner: `eval/rig/run_interop.sh` restarts the patched MockMDS in three configurations and writes `docs/INTEROP_RESULTS.md` by code. A first attempt reported stale numbers (the mock was not restarted cleanly); the runner now waits for the port to free and for discovery to answer before testing.
+- Result matrix (23 Oct 2026): patched MockMDS without replay properties: all PASS, 26.84 fps. Fork replay at 15 fps: all PASS, 15.16 fps. Fork replay at **2 fps: stream FAIL** (2.00 fps, "PDF minimum is 3"), the other checks PASS. Recorded MockAndroidSBI rCapture (emulator) and recorded desktop rCapture: PASS.
+- Tests (6, pass): `test_harness_flags_a_device_below_3fps`, `test_harness_flags_unsigned_rcapture`, plus passes for a good stream and a good record, a record without the ISO magic, and a live run against a fake slow, unsigned device (both flagged).
+- **Limits:**
+  - The "upstream behaviour" column is the patched build run without the replay properties, not the pristine upstream jar (the pristine build was exercised by the #35 contract tests before the patch).
+  - MockAndroidSBI was checked on a recorded rCapture only; its discovery, info and stream are intent-based and not covered by this HTTP harness.
+  - Part (b), liveness scenarios through the full engine, needs `LivenessService` (#34) and is not done.
+  - The harness has not been run on a real device. It reads only the face modality.
