@@ -166,3 +166,10 @@
 - Result on screen (`tools-local/build/p9f-screen.png`): callbackId `io.mosip.mock.sbi.face`, certification `L0`, deviceStatus `Ready`, errorCode `0`, specVersion `0.9.5`.
 - How the test was driven: the repo's SBITestClient, built from a copy in tools-local with four changes, none committed to upstream: action `sbi.reg.device` → `io.sbi.device`; `targetSdkVersion` 30 → 29 (Android 11+ package-visibility filter blocked the intent otherwise); the result key `Response` → `response` (byte array); and the old package uninstalled first (different signing key).
 - **Not done:** `rCapture` (face capture) through the mock, and the ARC (our Android client) discovering the mock itself. The emulator camera is the virtual scene, not the Mac webcam.
+
+## #36 Sbi095HttpAdapter (23 Oct 2026): DONE, with two caveats
+- `Sbi095HttpAdapter` extends the SBI 1.0 adapter and accepts only devices with serviceVersion 0.9.5. Shared parsing is now `parseDiscovery` and `parseCaptureRecord` (package-private, testable offline).
+- Test data: `testdata/recorded-095/` holds MockMDS responses recorded on 23 Oct 2026: discovery (3 face/finger/iris devices, all serviceVersion 0.9.5), one rCapture (ISO 19794-5 `FAC` record), and a short STREAM sample (multipart JPEG frames).
+- Tests (3, all pass, no live device needed): `test_095_stream_and_capture_parse`, `test_095_stream_frames_parse_from_recording`, `test_095_adapter_refuses_a_1_0_only_device`.
+- **Caveat 1, important:** MockMDS reports serviceVersion 0.9.5 for every device. So the "SBI 1.0" contract tests (#35) were also run against 0.9.5 responses. We have no real 1.0 device or 1.0 mock to test 1.0 against.
+- **Caveat 2, per the ticket's "wrap, don't rewrite":** the client's own `MosipDeviceSpecification_*_ProviderImpl` classes live in the registration-client fork (WS2, #40+). This adapter does not call them yet. It parses the same wire format directly.

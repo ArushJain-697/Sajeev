@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /** SBI 1.0 adapter. The device's own preview is not touched: we only read its stream (Bible §6.10). */
-public final class Sbi10HttpAdapter implements FaceCaptureDevice {
+public class Sbi10HttpAdapter implements FaceCaptureDevice {
 
     /** Where a discovered device answers. */
     static final class Endpoint {
@@ -87,6 +87,39 @@ public final class Sbi10HttpAdapter implements FaceCaptureDevice {
         return out;
     }
 
+    /** Hook for subclasses: which discovered devices this adapter accepts (default: all face devices). */
+    protected boolean acceptsDevice(JsonNode d) {
+        return true;
+    }
+
+    /**
+     * Parse a discovery response (a JSON array) from one port. Records the endpoints in {@code known}.
+     * Package-private so the recorded-response tests can call it without a live device.
+     */
+    List<DeviceInfo> parseDiscovery(int port, JsonNode arr) {
+        List<DeviceInfo> out = new ArrayList<>();
+        for (JsonNode d : arr) {
+            if (!"0".equals(d.path("error").path("errorCode").asText()) || !acceptsDevice(d)) {
+                continue;
+            }
+            String id = d.path("deviceId").asText();
+            String cert = d.path("certification").asText();
+            String type = digitalType(d.path("digitalId").asText());
+            if (!"Face".equals(type)) {
+                continue;
+            }
+            DeviceInfo.Level level = "L1".equals(cert) ? DeviceInfo.Level.L1
+                    : "L0".equals(cert) ? DeviceInfo.Level.L0 : null;
+            if (level == null) {
+                continue; // unknown certification is not listed rather than guessed
+            }
+            String key = port + ":" + id;
+            known.put(key, new Endpoint(port, id, cert, type, d.path("deviceCode").asText()));
+            out.add(new DeviceInfo(key, d.path("deviceCode").asText(), level));
+        }
+        return out;
+    }
+
     private List<DeviceInfo> scanOnce() {
         List<DeviceInfo> out = new ArrayList<>();
         known.clear();
@@ -97,26 +130,7 @@ public final class Sbi10HttpAdapter implements FaceCaptureDevice {
                 if (r.status != 200) {
                     continue;
                 }
-                JsonNode arr = json.readTree(r.body);
-                for (JsonNode d : arr) {
-                    if (!"0".equals(d.path("error").path("errorCode").asText())) {
-                        continue;
-                    }
-                    String id = d.path("deviceId").asText();
-                    String cert = d.path("certification").asText();
-                    String type = digitalType(d.path("digitalId").asText());
-                    if (!"Face".equals(type)) {
-                        continue;
-                    }
-                    DeviceInfo.Level level = "L1".equals(cert) ? DeviceInfo.Level.L1
-                            : "L0".equals(cert) ? DeviceInfo.Level.L0 : null;
-                    if (level == null) {
-                        continue; // unknown certification is not listed rather than guessed
-                    }
-                    String key = port + ":" + id;
-                    known.put(key, new Endpoint(port, id, cert, type, d.path("deviceCode").asText()));
-                    out.add(new DeviceInfo(key, d.path("deviceCode").asText(), level));
-                }
+                out.addAll(parseDiscovery(port, json.readTree(r.body)));
             } catch (IOException e) {
                 // nothing listening on this port; keep scanning
             }
@@ -184,21 +198,28 @@ public final class Sbi10HttpAdapter implements FaceCaptureDevice {
                 + "\"customOpts\":[]}";
         try {
             RawSbiHttp.Response r = RawSbiHttp.request(host, e.port, "RCAPTURE", "/capture", body, timeoutMs);
-            JsonNode b = json.readTree(r.body).path("biometrics").path(0);
-            String code = b.path("error").path("errorCode").asText();
-            if (!"0".equals(code)) {
-                throw new DeviceException(ErrorState.DEVICE_UNAVAILABLE, "rCapture error " + code);
-            }
-            String jwt = b.path("data").asText();
-            String[] parts = jwt.split("\\.");
-            if (parts.length != 3) {
-                throw new DeviceException(ErrorState.INVALID_FRAME_DATA, "rCapture data is not a signed token");
-            }
-            JsonNode payload = json.readTree(Base64.getUrlDecoder().decode(parts[1]));
-            return Base64.getUrlDecoder().decode(payload.path("bioValue").asText());
+            return parseCaptureRecord(r.body);
         } catch (IOException ex) {
             throw new DeviceException(ErrorState.DEVICE_DISCONNECTED, "rCapture failed: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Parse an rCapture response body into the raw face record bytes (the JWT payload's bioValue).
+     * Package-private so recorded responses can be tested offline.
+     */
+    byte[] parseCaptureRecord(byte[] body) throws DeviceException, IOException {
+        JsonNode b = json.readTree(body).path("biometrics").path(0);
+        String code = b.path("error").path("errorCode").asText();
+        if (!"0".equals(code)) {
+            throw new DeviceException(ErrorState.DEVICE_UNAVAILABLE, "rCapture error " + code);
+        }
+        String[] parts = b.path("data").asText().split("\\.");
+        if (parts.length != 3) {
+            throw new DeviceException(ErrorState.INVALID_FRAME_DATA, "rCapture data is not a signed token");
+        }
+        JsonNode payload = json.readTree(Base64.getUrlDecoder().decode(parts[1]));
+        return Base64.getUrlDecoder().decode(payload.path("bioValue").asText());
     }
 
     @Override
