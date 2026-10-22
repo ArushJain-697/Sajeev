@@ -81,3 +81,9 @@
 - Tests: 5 claims in `GuidanceKeysTest`. All pass.
 - **Not verified:** FR and AR are translations written here, **not checked by a native speaker**. The files say so in their header. Review before any public or judged use.
 - `ErrorState.POOR_QUALITY` maps to the "dark" key by default. The tracker's reason (too_small / dark / blurry) must choose the key; that wiring is #34.
+
+## #11 recording rig proof, synthetic part (22 Oct 2026)
+- `eval/rig/make_rate_clips.sh`: makes a 10 s test-pattern clip at 15 fps and re-samples it to 3, 10 and 15 fps with ffmpeg. Output: `testdata/clips-synthetic/fps{3,10,15}/` (30, 100, 150 frames).
+- `FileFrameSourceTest.test_replayed_clip_rate_within_10pct`: each folder loads through the MOCK `FileFrameSource` and lasts 10 s ±1 s. Passes.
+- **Not done (needs Arush):** the real camera. The Mac's `ffmpeg -f avfoundation` attempt returned "Input/output error" (camera permission or device not released). A real recording of a person is also a consented session under #59, so it waits for Arush. The phone-as-webcam clip is also pending.
+- ffprobe-based timestamp checks are not in the script yet. The counts above are exact for the synthetic source only.
