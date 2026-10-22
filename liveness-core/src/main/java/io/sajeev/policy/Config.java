@@ -160,8 +160,8 @@ public final class Config {
             throw new ConfigException("minFps must be > 0");
         }
         String onFail = v.get("onRepeatedFailure");
-        if (!"BLOCK".equals(onFail) && !"SUPERVISOR_OVERRIDE".equals(onFail)) {
-            throw new ConfigException("onRepeatedFailure must be BLOCK or SUPERVISOR_OVERRIDE");
+        if (!"BLOCK".equals(onFail) && !"SUPERVISOR_OVERRIDE".equals(onFail) && !"EXCEPTION_FLOW".equals(onFail)) {
+            throw new ConfigException("onRepeatedFailure must be BLOCK, SUPERVISOR_OVERRIDE or EXCEPTION_FLOW");
         }
     }
 
