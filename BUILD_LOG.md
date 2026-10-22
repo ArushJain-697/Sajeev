@@ -129,3 +129,9 @@
 - Intents present: `io.sbi.device`, `io.mosip.mock.sbi.face.Info`, `face.rCapture`.
 - **Not done:** the discovery result. Discovery needs a byte-array `input` extra (JSON). `adb am` cannot send it, so the activity closed with nothing to read. The repo's `SBITestClient` (or a small client app) is needed to send it and read the response. Also not done: the Mac webcam as emulator camera (the Mac camera did not open via ffmpeg).
 - `FaceMockRegSBI-v0.9.5.apk` (Release folder, `nprime.*` package) was also installed; it is the deprecated module and not used for the proof.
+
+## #02 licence audit, completed in the repo (22 Oct 2026)
+- `LICENSE` is now the official MPL-2.0 text (fetched from mozilla.org/media/MPL/2.0/index.txt). It was a placeholder.
+- `DISCLOSURES.md`: every dependency in use plus the planned ones, with VERIFIED or UNVERIFIED status. YuNet's source and licence are now confirmed.
+- `NOTICE`: written from DISCLOSURES.md.
+- Still open (not claimed as done): the MiniFASNet weights licence, the MediaPipe model card terms, Flutter's packages, ffmpeg build configuration.

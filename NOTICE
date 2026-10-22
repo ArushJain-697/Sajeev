@@ -1,1 +1,17 @@
-<!-- #02/#72: third-party notices. Fill from DISCLOSURES.md. -->
+SAJEEV
+Copyright (c) 2026 the SAJEEV contributors. Licensed under the Mozilla Public License 2.0 (see LICENSE).
+
+This product includes third-party software and models. The full list, licences and status are in DISCLOSURES.md.
+
+Apache License 2.0 components (notice required):
+- Jackson databind (com.fasterxml.jackson.core), Copyright FasterXML, LLC.
+- MiniFASNet code, Silent-Face-Anti-Spoofing, Copyright Minivision.
+- EJML (planned), Copyright Peter Abeles.
+
+MIT License components:
+- ONNX Runtime, Copyright Microsoft Corporation.
+- YuNet face detector, Copyright (c) 2020 Shiqi Yu.
+
+BSD-2-Clause (planned): JTransforms, Copyright Piotr Wendykier.
+
+The MiniFASNet weights and the MediaPipe model card terms are NOT yet verified. See DISCLOSURES.md.
