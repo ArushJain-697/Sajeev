@@ -38,3 +38,9 @@
 - `TextureCnnVoter`: averages V2 and V1SE live probability (never the max), ABSTAIN between thresholds (0.80 / 0.20 TARGET, DEV tuning only), ABSTAIN on engine error or when there is not exactly one face.
 - Tests: `test_onnx_matches_pytorch_within_1e_4` (Java ORT vs PyTorch reference, both models, 0 skipped) and `test_abstains_between_thresholds`.
 - **Not tested here:** whether V1 catches a printed photo or a screen replay. That is the attack evaluation (#59–#63), not a unit test.
+
+## #19 Voter V2 moiré: OPEN PROBLEM (22 Oct 2026, not committed)
+- Code exists but is NOT committed: `passive/moire/Fft2d.java` (plain radix-2 2D FFT) and `passive/moire/MoireMeasure.java` (isolated-peak energy share).
+- Finding: on a clean face crop (public-domain photo, 200 px, 128 analysis grid) the strongest isolated spectral peaks sit at roughly (±1..2, ±3..4). That is periodic structure in the photo itself (JPEG 8x8 block grid, resampling). The measure reads it as moiré: share 0.33 for the clean crop vs 0.28 for a synthetic grating. It does NOT separate clean from attack.
+- Decision: do NOT tune the threshold on one photo to make the test pass; that is overfitting. Next: exclude the JPEG block lattice frequencies, or use a different moiré cue (peaks off the axes, and a DEV-set threshold). Needs real attack and clean data (#59/#62).
+- Tests `test_synthetic_moire_pattern_votes_attack` and `test_clean_face_crop_does_not_vote_attack` are NOT written yet, so V2 is not claimed.
