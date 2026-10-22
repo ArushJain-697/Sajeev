@@ -20,3 +20,15 @@
 - Tests: 8 FrameGuard claims, 3 MJPEG claims, 2 file-source claims. 18 tests in total, 0 failures (JDK 21, `--release 11`).
 - **Honest caveat:** the 3/10/15 fps test uses a fake clock with exact timings, not recorded clips. Real recorded fixtures come in #59/#61. The Done-when line "fixtures at 3/10/15 fps pass" is met only for the synthetic case; say so in the docs.
 - `BLINK` minimum fps (8) is still a starting guess in Bible §6.6. Not changed here.
+
+## #16 Face detector + tracker states (22 Oct 2026)
+- `io.sajeev.face.YuNetDetector`: YuNet (MIT) via ONNX Runtime Java 1.19.2. Decoding checked against the Python reference: same face counts on all 5 fixtures.
+- `io.sajeev.face.FaceQuality` (size share, brightness, Laplacian sharpness) and `FaceTracker` (FACE_NOT_DETECTED, MULTIPLE_FACES pause, POOR_QUALITY with reason: too_small / dark / blurry).
+- Tests: 5 claims in `FaceTrackerTest`. All pass with the model (0 skipped).
+- Run: `mvn -pl liveness-core test -Dsajeev.models=<dir with face_detection_yunet_2023mar.onnx>` (without it the tests are skipped with a message).
+- **Limits (stated, not hidden):**
+  - Fixtures are one public-domain photo, plus synthetic variants (see testdata/fixtures-faces/README.md). Not a dataset.
+  - Limits (min face share 0.02, dark 40, blur 50) are TARGET values picked from these fixtures. Calibrate on DEV in #62.
+  - The limits are constructor arguments now. They move into config when #17/#28 wire them (P-H).
+  - Blurry fixture: YuNet loses the face, so the state is FACE_NOT_DETECTED. The blur metric still measures far below the limit.
+  - The image decoder is javax.imageio (desktop only). The Android decoder is a separate ticket (P0-10, #51/#54).

@@ -10,5 +10,11 @@
       <artifactId>liveness-api</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- ONNX Runtime (MIT), used by the face detector (#16) -->
+    <dependency>
+      <groupId>com.microsoft.onnxruntime</groupId>
+      <artifactId>onnxruntime</artifactId>
+      <version>1.19.2</version>
+    </dependency>
   </dependencies>
 </project>
