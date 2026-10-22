@@ -1,0 +1,117 @@
+diff --git a/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.bin b/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.bin
+index 6d90806..61244b1 100644
+Binary files a/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.bin and b/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.bin differ
+diff --git a/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.lock b/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.lock
+index 36ff60d..73ef6cd 100644
+Binary files a/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.lock and b/SBITestClient/.gradle/6.7.1/executionHistory/executionHistory.lock differ
+diff --git a/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.bin b/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.bin
+index a51aed1..f3ae717 100644
+Binary files a/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.bin and b/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.bin differ
+diff --git a/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.lock b/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.lock
+index 1bce151..3b85aac 100644
+Binary files a/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.lock and b/SBITestClient/.gradle/6.7.1/fileHashes/fileHashes.lock differ
+diff --git a/SBITestClient/.gradle/6.7.1/javaCompile/classAnalysis.bin b/SBITestClient/.gradle/6.7.1/javaCompile/classAnalysis.bin
+index 4ade2ed..8455b05 100644
+Binary files a/SBITestClient/.gradle/6.7.1/javaCompile/classAnalysis.bin and b/SBITestClient/.gradle/6.7.1/javaCompile/classAnalysis.bin differ
+diff --git a/SBITestClient/.gradle/6.7.1/javaCompile/javaCompile.lock b/SBITestClient/.gradle/6.7.1/javaCompile/javaCompile.lock
+index 42861cd..f375f21 100644
+Binary files a/SBITestClient/.gradle/6.7.1/javaCompile/javaCompile.lock and b/SBITestClient/.gradle/6.7.1/javaCompile/javaCompile.lock differ
+diff --git a/SBITestClient/.gradle/6.7.1/javaCompile/taskHistory.bin b/SBITestClient/.gradle/6.7.1/javaCompile/taskHistory.bin
+index b5c262c..65246c0 100644
+Binary files a/SBITestClient/.gradle/6.7.1/javaCompile/taskHistory.bin and b/SBITestClient/.gradle/6.7.1/javaCompile/taskHistory.bin differ
+diff --git a/SBITestClient/.gradle/buildOutputCleanup/buildOutputCleanup.lock b/SBITestClient/.gradle/buildOutputCleanup/buildOutputCleanup.lock
+index fb15113..d1505aa 100644
+Binary files a/SBITestClient/.gradle/buildOutputCleanup/buildOutputCleanup.lock and b/SBITestClient/.gradle/buildOutputCleanup/buildOutputCleanup.lock differ
+diff --git a/SBITestClient/.gradle/buildOutputCleanup/outputFiles.bin b/SBITestClient/.gradle/buildOutputCleanup/outputFiles.bin
+index 666d991..ce0b663 100644
+Binary files a/SBITestClient/.gradle/buildOutputCleanup/outputFiles.bin and b/SBITestClient/.gradle/buildOutputCleanup/outputFiles.bin differ
+diff --git a/SBITestClient/.gradle/checksums/checksums.lock b/SBITestClient/.gradle/checksums/checksums.lock
+index 357dd90..6617e00 100644
+Binary files a/SBITestClient/.gradle/checksums/checksums.lock and b/SBITestClient/.gradle/checksums/checksums.lock differ
+diff --git a/SBITestClient/app/build.gradle b/SBITestClient/app/build.gradle
+index c3cedbc..64d7ee9 100644
+--- a/SBITestClient/app/build.gradle
++++ b/SBITestClient/app/build.gradle
+@@ -9,7 +9,7 @@ android {
+     defaultConfig {
+         applicationId "nprime.reg.mocksbi.sbinprimetestapp"
+         minSdkVersion 26
+-        targetSdkVersion 30
++        targetSdkVersion 29
+         versionCode 1
+         versionName "1.0"
+ 
+diff --git a/SBITestClient/app/src/main/java/nprime/reg/mocksbi/sbinprimetestapp/MainActivity.java b/SBITestClient/app/src/main/java/nprime/reg/mocksbi/sbinprimetestapp/MainActivity.java
+index dec802f..e491ba2 100644
+--- a/SBITestClient/app/src/main/java/nprime/reg/mocksbi/sbinprimetestapp/MainActivity.java
++++ b/SBITestClient/app/src/main/java/nprime/reg/mocksbi/sbinprimetestapp/MainActivity.java
+@@ -118,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
+     private void discover(){
+         try{
+             Intent intent = new Intent();
+-            intent.setAction("sbi.reg.device");
++            intent.setAction("io.sbi.device");
+ 
+             PackageManager packageManager = this.getPackageManager();
+             List<ResolveInfo> activities = packageManager.queryIntentActivities(intent,PackageManager.MATCH_DEFAULT_ONLY);
+@@ -141,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
+ 
+     private void info(){
+         Intent intent = new Intent();
+-        intent.setAction(appID + ".info");
++        intent.setAction(appID + ".Info");
+ 
+         PackageManager packageManager = this.getPackageManager();
+         List<ResolveInfo> activities = packageManager.queryIntentActivities(intent,PackageManager.MATCH_DEFAULT_ONLY);
+@@ -151,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
+         if(isIntentSafe) {
+             String packageName;
+             for (ResolveInfo activity : activities) {
+-                if(activity.activityInfo.applicationInfo.packageName.equals(appID)) {
++                if(activity.activityInfo.applicationInfo.packageName.equals("io.mosip.mock.sbi")) {
+                     packageName = activity.activityInfo.applicationInfo.packageName;
+                     intent.setComponent(new ComponentName(packageName, activity.activityInfo.name));
+                     startActivityForResult(intent, REQUEST_INFO);
+@@ -166,7 +166,7 @@ public class MainActivity extends AppCompatActivity {
+     private void capture(){
+         try {
+             Intent intent = new Intent();
+-            intent.setAction(appID + ".rcapture");
++            intent.setAction(appID + ".rCapture");
+ 
+             PackageManager packageManager = this.getPackageManager();
+             List<ResolveInfo> activities = packageManager.queryIntentActivities(intent,PackageManager.MATCH_DEFAULT_ONLY);
+@@ -200,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
+ 
+                 String packageName;
+                 for (ResolveInfo activity : activities) {
+-                    if(activity.activityInfo.applicationInfo.packageName.equals(appID)) {
++                    if(activity.activityInfo.applicationInfo.packageName.equals("io.mosip.mock.sbi")) {
+                         packageName = activity.activityInfo.applicationInfo.packageName;
+                         intent.setComponent(new ComponentName(packageName, activity.activityInfo.name));
+                         intent.putExtra("input", new ObjectMapper().writeValueAsBytes(captureRequestDto));
+@@ -223,8 +223,8 @@ public class MainActivity extends AppCompatActivity {
+             if(Activity.RESULT_OK == resultCode){
+                 try{
+                     if(null != data) {
+-                        if (data.hasExtra("Response")) {
+-                            String response = data.getStringExtra("Response");
++                        if (data.hasExtra("response")) {
++                            String response = new String(data.getByteArrayExtra("response"), java.nio.charset.StandardCharsets.UTF_8);
+                             JSONArray respJsonArray = new JSONArray(response);
+                             JSONObject respJsonObject = respJsonArray.getJSONObject(0);
+                             JSONObject errorObject = respJsonObject.getJSONObject("error");
+@@ -250,8 +250,8 @@ public class MainActivity extends AppCompatActivity {
+             if(Activity.RESULT_OK == resultCode){
+                 try {
+                     if(null != data) {
+-                        if (data.hasExtra("Response")) {
+-                            String response = data.getStringExtra("Response");
++                        if (data.hasExtra("response")) {
++                            String response = new String(data.getByteArrayExtra("response"), java.nio.charset.StandardCharsets.UTF_8);
+                             responseData = response;
+                             JSONArray respJsonArray = new JSONArray(response);
+                             JSONObject errorObject = respJsonArray.getJSONObject(0).getJSONObject("error");
+diff --git a/SBITestClient/gradlew b/SBITestClient/gradlew
+old mode 100644
+new mode 100755

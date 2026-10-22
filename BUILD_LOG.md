@@ -192,3 +192,11 @@
 - The test client's RCAPTURE button stays disabled. It is enabled only after INFO sets `serialNo`. INFO returned a blank screen, even after two client fixes in the build copy: action case `.info` → `.Info`, and tapping DISCOVER before INFO.
 - Likely cause (not confirmed): UI automation via `uiautomator` taps before the activity has finished loading. Next try: wait for the DISCOVER text to appear in a loop, then tap, then wait for the response before tapping INFO.
 - The active mock still answers discovery (see the entry above). rCapture is still open, along with the ARC discovering the mock itself.
+
+## #09 emulator + MockAndroidSBI: DONE (23 Oct 2026)
+- Discovery, Info and rCapture all work against the active mock `io.mosip.mock.sbi` on the Android 13 arm64 emulator.
+- What was missing for Info and rCapture: (1) the test client compared the package to the callbackId (`io.mosip.mock.sbi.face` vs `io.mosip.mock.sbi`); (2) action case `.Info` and `.rCapture`; (3) the mock needs a device keystore. The mock threw `NoSuchFileException device_p12_file.p12`. Fix: MockMDS's `mosipface.p12` (alias and password `mosipface`) copied in with `run-as`, plus preferences.
+- rCapture result (`testdata/recorded-android/rcapture-face.json`): `errorCode 0`, signed token, `bioValue` 67087 bytes, ISO 19794-5 `FAC` header, JPEG 2000 image inside.
+- **Important finding:** the record is exactly the same size (67087 bytes) as the desktop MockMDS record. The mock returns a bundled stock face image; it is not the camera's picture. So the mock cannot be used to test live capture quality, only the SBI plumbing.
+- Patches and scripts saved: `integrations/patches/0002-sbitestclient-for-active-mock.patch`, `eval/rig/drive_sbi_test_client.py`, `eval/rig/mock_sbi_prefs.xml`; steps in `integrations/README.md`.
+- **Still not done:** ARC (our Android client) discovering the mock itself; the Mac webcam as the emulator camera.
