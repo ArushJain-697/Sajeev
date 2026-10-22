@@ -187,3 +187,8 @@
 - `docs/ANALYSIS_DEVICE_INTEGRATION.md`: SBI methods (MOSIPDISC, RCAPTURE, STREAM, MOSIPDINFO) with file:line in the desktop client, provider selection by spec version, stream path, face record format, Android intent path.
 - `docs/ANALYSIS_FACE_WORKFLOWS.md`: resident, operator and supervisor flows on desktop and Android, with the liveness hook point for each. Confirmed: no liveness code exists in either client.
 - Line numbers refer to the pinned commits named in each file (desktop c1cc4e7, Android 6e1943c). Re-check if the pins change.
+
+## #09 rCapture: NOT DONE (23 Oct 2026), stopped here
+- The test client's RCAPTURE button stays disabled. It is enabled only after INFO sets `serialNo`. INFO returned a blank screen, even after two client fixes in the build copy: action case `.info` → `.Info`, and tapping DISCOVER before INFO.
+- Likely cause (not confirmed): UI automation via `uiautomator` taps before the activity has finished loading. Next try: wait for the DISCOVER text to appear in a loop, then tap, then wait for the response before tapping INFO.
+- The active mock still answers discovery (see the entry above). rCapture is still open, along with the ARC discovering the mock itself.
