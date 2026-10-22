@@ -12,3 +12,5 @@
 | MiniFASNet code | Apache-2.0 | minivision-ai/Silent-Face-Anti-Spoofing | borrowed |
 | MiniFASNet weights | **NO STATED LICENCE** | same | **UNVERIFIED, resolve via #04** |
 | Face-landmark weights | Apache-2.0 per mirrors only | MediaPipe | **UNVERIFIED, confirm official card** |
+| Jackson databind 2.17.2 (JSON for SBI responses) | Apache-2.0 | github.com/FasterXML/jackson-databind | borrowed |
+| MOSIP MockMDS (test-only, run locally for contract tests, not shipped) | MPL-2.0 | github.com/mosip/mosip-mock-services | borrowed (test fixture) |

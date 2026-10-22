@@ -44,3 +44,16 @@
 - Finding: on a clean face crop (public-domain photo, 200 px, 128 analysis grid) the strongest isolated spectral peaks sit at roughly (±1..2, ±3..4). That is periodic structure in the photo itself (JPEG 8x8 block grid, resampling). The measure reads it as moiré: share 0.33 for the clean crop vs 0.28 for a synthetic grating. It does NOT separate clean from attack.
 - Decision: do NOT tune the threshold on one photo to make the test pass; that is overfitting. Next: exclude the JPEG block lattice frequencies, or use a different moiré cue (peaks off the axes, and a DEV-set threshold). Needs real attack and clean data (#59/#62).
 - Tests `test_synthetic_moire_pattern_votes_attack` and `test_clean_face_crop_does_not_vote_attack` are NOT written yet, so V2 is not claimed.
+
+## #35 Sbi10HttpAdapter, contract tests against unmodified MockMDS (22 Oct 2026)
+- `RawSbiHttp`: raw HTTP/1.1 for custom methods (MOSIPDISC, MOSIPDINFO, STREAM, RCAPTURE). Java's HttpURLConnection refuses custom methods.
+- `Sbi10HttpAdapter`: discovery on ports 4501–4600 (`/device`), stream (`/stream`, parsed by MjpegParser from #15), capture (`/capture`). Level L0/L1 from the discovery `certification`. Only Face devices are listed; an unknown certification is skipped, not guessed.
+- Endpoints confirmed by reading MockMDS (`WebMvcConfigure`): `/device`, `/info`, `/capture`, `/stream`.
+- **Contract tests (3/3 pass)**: `test_discovers_mock_device`, `test_stream_returns_frames_at_least_every_3s` (2 frames, gap ≤ 3.5 s), `test_rcapture_returns_signed_face_record` (record starts with the ISO 19794-5 magic `FAC`).
+- **Run MockMDS for the tests** (not part of the repo; from `tools-local/build/mockmds`, after `mvn package`):
+  `java -cp "target/classes:$(cat cp.txt)" io.mosip.mock.sbi.test.TestMockSBI "mosip.mock.sbi.device.purpose=Registration" "mosip.mock.sbi.biometric.type=Biometric Device"`
+  The MockMDS pom forces `skipTests=false`; the build copy was set to `true` to package. The upstream clone is unchanged.
+- **Observed, not explained:** the first discovery in a test run returned an empty list while a later call returned the device. Discovery now retries 3 times. Cause unconfirmed.
+- **Not done here:** capture returns an ISO record with a JPEG 2000 image. `capture()` refuses it (INVALID_FRAME_DATA) until a JP2 decoder is wired (#51/#54). `captureRecord()` returns the raw signed bytes.
+- Error-code mapping (codes 100–112, 5xx) is #38, not done.
+- Stream fps is not measured in the adapter: FrameGuard (#15) does that.
