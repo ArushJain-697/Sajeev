@@ -136,4 +136,18 @@ public final class FaceFeatures {
     public static boolean eyesClosed(float[][] p, double threshold) {
         return eyeAspectRatio(p, EYE_LEFT) < threshold && eyeAspectRatio(p, EYE_RIGHT) < threshold;
     }
+
+    /**
+     * Pitch proxy: where the nose tip sits between the eye line and the mouth, 0 at the eyes and 1 at the mouth.
+     * Tilting the head up moves the nose toward the eye line (smaller value); down moves it toward the mouth.
+     * Use it relative to the person's neutral value. Not degrees; calibrated later.
+     * @param p landmarks
+     * @return the proxy
+     */
+    public static double pitch(float[][] p) {
+        double eyeY = (p[EYE_LEFT[0]][1] + p[EYE_LEFT[3]][1] + p[EYE_RIGHT[0]][1] + p[EYE_RIGHT[3]][1]) / 4.0;
+        double mouthY = (p[LIP_TOP][1] + p[LIP_BOTTOM][1]) / 2.0;
+        double span = mouthY - eyeY;
+        return span <= 0 ? 0.0 : (p[NOSE][1] - eyeY) / span;
+    }
 }
