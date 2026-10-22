@@ -160,3 +160,9 @@
 - Tests (6): the six claims from BUILD_MAP. The "243 combinations × bands" test checks four invariants over every combination and band, not a re-typed copy of the table.
 - G1 (stream unusable) path is implemented but has no dedicated test; add one with #34.
 - Gate outcome is its own enum in the gate package, so the frozen `GateResult` API is unchanged. LIVENESS_NOT_ESTABLISHED lives there, not in the API.
+
+## #09 emulator + MockAndroidSBI discovery: DISCOVERY PASSED (22 Oct 2026); rCapture not yet
+- Active module `io.mosip.mock.sbi` (MockAndroidSBI develop da9d7e4, built with Gradle 8.5) answers the `io.sbi.device` intent on the Android 13 arm64 emulator.
+- Result on screen (`tools-local/build/p9f-screen.png`): callbackId `io.mosip.mock.sbi.face`, certification `L0`, deviceStatus `Ready`, errorCode `0`, specVersion `0.9.5`.
+- How the test was driven: the repo's SBITestClient, built from a copy in tools-local with four changes, none committed to upstream: action `sbi.reg.device` → `io.sbi.device`; `targetSdkVersion` 30 → 29 (Android 11+ package-visibility filter blocked the intent otherwise); the result key `Response` → `response` (byte array); and the old package uninstalled first (different signing key).
+- **Not done:** `rCapture` (face capture) through the mock, and the ARC (our Android client) discovering the mock itself. The emulator camera is the virtual scene, not the Mac webcam.
