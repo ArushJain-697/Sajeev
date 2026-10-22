@@ -17,3 +17,7 @@ Not yet pinned: the `develop` line (failed, #05), `android-registration-client` 
 3. Run `python3 eval/rig/drive_sbi_test_client.py` (taps DISCOVER, INFO, RCAPTURE and waits on the mock's log markers).
 4. The capture response lands in the mock's `files/output/<client>/resp_*.txt` (read with `run-as`). A copy is in `testdata/recorded-android/rcapture-face.json`.
 
+| 0003-mockandroidsbi-frame-feed.patch | android-camera-mds `develop` @ da9d7e49edae2a94cccddf948b7e7633360cd837, module MockAndroidSBI | #50 | Adds `io.mosip.mock.sbi.feed.FrameFeedService` (bound service, Messenger), `ReplaySource` (MOCK frames), signature-level permission `io.mosip.mock.sbi.permission.FRAME_FEED`, and `mock:true` in `DeviceInfoResponse`. The patch also records a file-mode change on `gradlew` (made executable in the build copy); ignore it. |
+
+`integrations/feedprobe/` is a tiny test app (`io.sajeev.feedprobe`) that binds to the feed and logs what it receives. Test tooling only. Run `eval/rig/test_feed.sh`.
+

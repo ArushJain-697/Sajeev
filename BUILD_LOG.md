@@ -200,3 +200,13 @@
 - **Important finding:** the record is exactly the same size (67087 bytes) as the desktop MockMDS record. The mock returns a bundled stock face image; it is not the camera's picture. So the mock cannot be used to test live capture quality, only the SBI plumbing.
 - Patches and scripts saved: `integrations/patches/0002-sbitestclient-for-active-mock.patch`, `eval/rig/drive_sbi_test_client.py`, `eval/rig/mock_sbi_prefs.xml`; steps in `integrations/README.md`.
 - **Still not done:** ARC (our Android client) discovering the mock itself; the Mac webcam as the emulator camera.
+
+## #50 MockAndroidSBI: frame feed (bound service) + replay + mock flag: TESTS PASS, ARC not yet (23 Oct 2026)
+- Added to the mock (patch `0003-mockandroidsbi-frame-feed.patch`): `FrameFeedService` (Messenger, per-frame ACK for backpressure, allow-list of caller packages), `ReplaySource` (JPEG files in `files/replay/`, else SYNTHETIC frames), signature-level permission `io.mosip.mock.sbi.permission.FRAME_FEED`, and `mock: true` in the device info response.
+- Tested on the Android 13 arm64 emulator with `integrations/feedprobe` (patch applied, installed):
+  - `test_replay_mode_streams_a_clip_at_configured_fps`: PASS. Configured 10 fps, measured 9.7 (synthetic); configured 15 fps from 20 replayed JPEG files, measured 14.6, all frames carry `mock=true`.
+  - `test_second_app_cannot_bind_to_the_frame_feed`: PASS. The probe re-signed with another key got `SecurityException: Not allowed to bind`, and the system logged `Permission Denial ... requires io.mosip.mock.sbi.permission.FRAME_FEED` (`granted=false`).
+  - `test_feed_does_not_stall_sbi_preview`: PASS. A deliberately slow subscriber (400 ms per frame) received 2.5 fps; the service sent 114 and dropped 550 for it, and discovery, info and rCapture completed normally in the same period (a fresh capture response file was written).
+- **Not done (the ticket's "Done when"):** ARC, our Android client, receiving frames. That needs `AndroidSbiStreamAdapter` (#51) and the Android packaging (#48).
+- **Limits:** frames are MOCK (synthetic or replayed files), not the camera's picture. The `mock:true` flag is in the outer device-info JSON, not inside the signed `deviceInfo` token. The caller allow-list holds the ARC package name from the plan; it has not been exercised with ARC. The "mock" flag on the signed payload would need a change in the signing code.
+- Not done in this ticket: the `docs/PROPOSAL_SBI_ANDROID_STREAM.md` (#70, optional-last by D42).
