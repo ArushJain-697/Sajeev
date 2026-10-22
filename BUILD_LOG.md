@@ -102,3 +102,9 @@
 ## #67 technology evaluation (22 Oct 2026)
 - `docs/TECHNOLOGY_EVALUATION.md`: candidates, licences, offline fit, cost, decision, and rejected approaches (rPPG, depth/IR, commercial SDK, blink-only).
 - Claims not checked are marked UNVERIFIED in the file. Open: MiniFASNet weights licence, MediaPipe model card terms, accelerator speed (#10).
+
+## #10 ONNX Runtime accelerators, Mac part (22 Oct 2026)
+- CPU path works on macOS arm64 (all models, tests pass).
+- CoreML execution provider is available from ORT Java 1.19.2 on this Mac. Probe (`liveness-core/src/test/java/io/sajeev/accel/AcceleratorProbeTest.java`, MiniFASNet V2 logits on a fixed input): max abs difference from CPU = **0.00706**. Our CPU parity limit is 1e-4.
+- Decision (R1-10): accelerator **disabled by default**. It may be enabled only if its difference is within a tolerance measured on the DEV set (#62). Until then every decision uses the CPU reference.
+- **Not done:** Windows x64 (Lenovo, optional), Android arm64 (NNAPI, #58), and the DEV-set tolerance (#62).
