@@ -117,3 +117,15 @@
   - The yaw test uses a near-frontal photo (yaw ±0.04). It checks the sign convention, not a real head turn. A real left-turn clip is needed.
   - **Not written:** `test_gaze_direction_on_four_direction_fixtures` and `test_ear_drops_when_eyes_closed`. They need the four-direction and closed-eye clips from #59. No fake fixtures were made.
   - Yaw is a proxy in [-1, 1], not degrees. Calibration is later.
+
+## #08 Android toolchain + debug APK (22 Oct 2026): DONE
+- Flutter **3.10.4** (not 3.7.12, see DECISION_MAP D44). Client pubspec SDK constraint widened to `<4.0.0` in the **build copy only** (`tools-local/build/android-client`), not in upstream or in our fork yet.
+- `pigeon.sh` run in the build copy (generated Dart and Java files are not in the repo).
+- `flutter build apk --debug` → `app-debug.apk` (323 MB). JDK 17.0.20.1, Gradle 7.5 via wrapper, SDK platform 33.
+
+## #09 emulator + MockAndroidSBI discovery: PARTIAL (22 Oct 2026)
+- Emulator: AVD `sajeev36` (Android 13, google_apis arm64, pixel_5), booted headless in 24 s, no webcam (virtual scene camera, not the Mac webcam).
+- Built `MockAndroidSBI` (active module, `io.mosip.mock.sbi`, da9d7e4) with Gradle 8.5, SDK platform 30. Installed, camera permission granted by adb.
+- Intents present: `io.sbi.device`, `io.mosip.mock.sbi.face.Info`, `face.rCapture`.
+- **Not done:** the discovery result. Discovery needs a byte-array `input` extra (JSON). `adb am` cannot send it, so the activity closed with nothing to read. The repo's `SBITestClient` (or a small client app) is needed to send it and read the response. Also not done: the Mac webcam as emulator camera (the Mac camera did not open via ffmpeg).
+- `FaceMockRegSBI-v0.9.5.apk` (Release folder, `nprime.*` package) was also installed; it is the deprecated module and not used for the proof.
