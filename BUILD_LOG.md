@@ -141,3 +141,8 @@
 - Tests (3, SYNTHETIC glare on the public-domain photo): glossy glare → ATTACK; matte skin → LIVE; extreme dark → ABSTAIN.
 - **Not done:** the chroma statistics half of the spec. Without it V5 uses glare only. No threshold uses skin tone.
 - Limits are TARGET values and are not tuned on real prints (#62).
+
+## #21 V4 frame-edge voter, PARTIAL (22 Oct 2026)
+- `FrameEdgeVoter`: Sobel edges; a side counts as a line when a row or column has enough strong edges over the face span; ATTACK when all four sides enclose the face; ABSTAIN when the face fills more than 80% of the frame.
+- Tests (3, SYNTHETIC drawn bezel on a grey scene): bezel → ATTACK; plain background → LIVE; face fills frame → ABSTAIN.
+- **Not done / limits:** only axis-aligned edges (a tilted phone is missed). A real office scene with shelves or a doorframe is not tested, so false ATTACK votes are possible. The real "held phone" fixture is needed (#59). Thresholds are TARGET values.
