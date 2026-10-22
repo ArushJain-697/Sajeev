@@ -98,3 +98,7 @@
 - `eval/ingest.sh`: renames to session_subject_device_species_NNN.mp4, probes fps and duration, hashes, refuses unlabelled files, writes a manifest.
 - `eval/tests/test_ingest.sh`: PASS on both claims (manifest has hash/species/fps; unlabelled file rejected).
 - `eval/clips/` added to .gitignore.
+
+## #67 technology evaluation (22 Oct 2026)
+- `docs/TECHNOLOGY_EVALUATION.md`: candidates, licences, offline fit, cost, decision, and rejected approaches (rPPG, depth/IR, commercial SDK, blink-only).
+- Claims not checked are marked UNVERIFIED in the file. Open: MiniFASNet weights licence, MediaPipe model card terms, accelerator speed (#10).
