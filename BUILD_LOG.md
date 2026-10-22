@@ -91,3 +91,10 @@
 ## #12 UX specification (22 Oct 2026)
 - `docs/UIUX/README.md`: all 15 PDF UI/UX items as written specifications, with states and message keys, plus an accessibility checklist.
 - **Not done:** visual mockups and icon artwork. The ticket asked for mockups; what exists is the spec they must follow. Marked in the file.
+
+## #59 recording protocol, consent, ingest tooling (22 Oct 2026)
+- `eval/RECORDING_PROTOCOL.md`: shot lists per species P1–P6 and bona fide, sizes (D31), D32 device/room/day split, consent steps.
+- `eval/consent/CONSENT_FORM.md`: consent template.
+- `eval/ingest.sh`: renames to session_subject_device_species_NNN.mp4, probes fps and duration, hashes, refuses unlabelled files, writes a manifest.
+- `eval/tests/test_ingest.sh`: PASS on both claims (manifest has hash/species/fps; unlabelled file rejected).
+- `eval/clips/` added to .gitignore.

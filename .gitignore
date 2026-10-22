@@ -4,3 +4,6 @@ target/
 .idea/
 # HELD-OUT recordings must never be committed unsealed
 testdata/heldout/
+
+# Recorded clips and consent material never go in git (#59)
+eval/clips/
