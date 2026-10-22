@@ -87,3 +87,7 @@
 - `FileFrameSourceTest.test_replayed_clip_rate_within_10pct`: each folder loads through the MOCK `FileFrameSource` and lasts 10 s ±1 s. Passes.
 - **Not done (needs Arush):** the real camera. The Mac's `ffmpeg -f avfoundation` attempt returned "Input/output error" (camera permission or device not released). A real recording of a person is also a consented session under #59, so it waits for Arush. The phone-as-webcam clip is also pending.
 - ffprobe-based timestamp checks are not in the script yet. The counts above are exact for the synthetic source only.
+
+## #12 UX specification (22 Oct 2026)
+- `docs/UIUX/README.md`: all 15 PDF UI/UX items as written specifications, with states and message keys, plus an accessibility checklist.
+- **Not done:** visual mockups and icon artwork. The ticket asked for mockups; what exists is the spec they must follow. Marked in the file.
