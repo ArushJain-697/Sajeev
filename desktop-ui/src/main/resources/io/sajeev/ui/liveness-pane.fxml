@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- #41: one pane for resident, operator and supervisor. Plain controls only (JavaFX 11 compatible).
+     Text comes from guidance keys; colour is never the only signal (every state has a text badge). -->
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.shape.Ellipse?>
+
+<VBox xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+      fx:id="root" fx:controller="io.sajeev.ui.LivenessPaneController"
+      alignment="TOP_CENTER" spacing="10"
+      style="-fx-padding: 16; -fx-background-color: #ffffff; -fx-font-size: 16px;">
+    <Label fx:id="title" style="-fx-font-weight: bold; -fx-font-size: 1.2em; -fx-text-fill: #1b1f24;"/>
+    <Label fx:id="badge"/>
+    <StackPane fx:id="guide">
+        <Ellipse radiusX="55" radiusY="70" fill="transparent" stroke="#0b5cab" strokeWidth="4"/>
+        <Label fx:id="icon" style="-fx-font-size: 2.2em; -fx-text-fill: #0b5cab;"/>
+    </StackPane>
+    <HBox fx:id="dots" alignment="CENTER" spacing="8"/>
+    <Label fx:id="message" wrapText="true" textAlignment="CENTER" alignment="CENTER" maxWidth="360"
+           style="-fx-font-weight: bold; -fx-text-fill: #1b1f24;"/>
+    <VBox fx:id="hints" alignment="CENTER" spacing="2"/>
+    <HBox fx:id="buttons" alignment="CENTER" spacing="8"/>
+    <Label fx:id="footer" alignment="CENTER" style="-fx-text-fill: #4a5560;"/>
+</VBox>

@@ -216,3 +216,11 @@
 - Light-theme contrast computed: every pair at or above 4.5:1 (lowest 5.40:1). The dark palette was not computed.
 - Checked in the browser at 375 px: no horizontal scroll, 15 cards, no raw message keys.
 - **Limits:** these are mockups, not production screens; they are not user-tested; icons are emoji and shapes; Arabic and French wording is not rendered in the mockups (English text only); screen-reader behaviour was not tested with a real screen reader.
+
+## #41 Desktop FXML UI, all states (23 Oct 2026): DONE in the repo; client wiring is #42-#44
+- New module `desktop-ui` (Maven, JavaFX 21.0.3, release 17 for this arm64 Mac; the MOSIP 1.2.0.x client runs JavaFX 11, so the Java is recompiled when it moves into the client fork and the FXML is plain controls only).
+- `UiState` (pure data), `UiStates` (UX1–UX14 and a screen for every one of the 13 ErrorStates), `LivenessPaneController` + `liveness-pane.fxml` (one pane for resident, operator, supervisor; Arabic lays out right-to-left; accessible text on the guide, progress and buttons; `showLater` uses `Platform.runLater`).
+- 12 UI keys and 3 title keys added to the EN, FR and AR bundles (FR and AR are my translations, still not reviewed by a native speaker).
+- Tests (4, pure model, pass): every error state renders a message in all three languages; all 14 UX screens have text in every language; the PAD failure screen shows no detail; every screen has a text badge.
+- Screenshots: `ScreenshotMain` renders UX1–UX14 with JavaFX snapshots. 42 PNGs (14 per language, en, fr, ar) in `docs/UIUX/desktop/`. Checked by eye: UX8, UX9, UX13 in English and UX9 in Arabic (right-to-left, correct glyphs). A first render had left-aligned messages; fixed with `alignment="CENTER"`.
+- **Limits:** it is a standalone pane, not yet inside the registration client (needs #42–#44 and a JavaFX 11 recompile). Diagnostic panel behind config is not built. No live preview image (the oval is a placeholder). The spoken prompt is a key, not audio. The headless TestFX test named in the spec was not used: the model tests cover the claim, and the snapshot tool needs a display (it ran on this Mac's session).

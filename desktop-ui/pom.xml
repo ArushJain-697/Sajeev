@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- #41. Desktop UI panes (JavaFX FXML). Built on JavaFX 21 for this arm64 Mac; the MOSIP 1.2.0.x client runs JavaFX 11,
+     so the FXML is kept to plain controls and the Java is recompiled when it moves into the client fork (#42-#46). -->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>io.sajeev</groupId><artifactId>sajeev-parent</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+  <artifactId>desktop-ui</artifactId>
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <javafx.version>21.0.3</javafx.version>
+  </properties>
+  <dependencies>
+    <dependency><groupId>io.sajeev</groupId><artifactId>liveness-core</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-controls</artifactId><version>${javafx.version}</version></dependency>
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-fxml</artifactId><version>${javafx.version}</version></dependency>
+    <!-- javafx-swing is only used by ScreenshotMain (PNG export) -->
+    <dependency><groupId>org.openjfx</groupId><artifactId>javafx-swing</artifactId><version>${javafx.version}</version></dependency>
+  </dependencies>
+</project>
