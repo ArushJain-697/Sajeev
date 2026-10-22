@@ -1,5 +1,5 @@
 // #17 (WS1) | Bible §6.2 | Tests named as claims. Needs the landmark and YuNet models (-Dsajeev.models=<dir>).
-// NOT written here (no fixtures yet): test_gaze_direction_on_four_direction_fixtures and test_ear_drops_when_eyes_closed (see BUILD_LOG #17).
+// The gaze and closed-eye tests below use SYNTHETIC fixtures (testdata/fixtures-gaze), not real people (see BUILD_LOG #17).
 package io.sajeev.face;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,5 +73,36 @@ class LandmarkFeaturesTest {
         // A mirror turns the face the other way: the sign must flip (tolerance for a small detection difference)
         assertTrue(y * ym < 0, "yaw " + y + " and mirrored yaw " + ym + " should have opposite signs");
         assertTrue(Math.abs(y + ym) < 0.15, "yaw " + y + " and mirrored yaw " + ym + " should be equal and opposite");
+    }
+
+    private static float[][] landmarksFile(String file) throws Exception {
+        BufferedImage img = ImageIO.read(new File("../testdata/fixtures-gaze/" + file));
+        return landmarksOf(root(), img);
+    }
+
+    @Test
+    void test_gaze_direction_on_four_direction_fixtures() throws Exception {
+        // SYNTHETIC fixtures. TARGET limits: horizontal 0.07, up 0.04, down 0.02 of the eye width.
+        double[] neutral = FaceFeatures.gaze(landmarksFile("neutral.jpg"));
+        assertEquals(FaceFeatures.Gaze.LEFT,
+                FaceFeatures.classifyGaze(FaceFeatures.gaze(landmarksFile("look_left.jpg")), neutral, 0.07, 0.04, 0.02));
+        assertEquals(FaceFeatures.Gaze.RIGHT,
+                FaceFeatures.classifyGaze(FaceFeatures.gaze(landmarksFile("look_right.jpg")), neutral, 0.07, 0.04, 0.02));
+        assertEquals(FaceFeatures.Gaze.UP,
+                FaceFeatures.classifyGaze(FaceFeatures.gaze(landmarksFile("look_up.jpg")), neutral, 0.07, 0.04, 0.02));
+        assertEquals(FaceFeatures.Gaze.DOWN,
+                FaceFeatures.classifyGaze(FaceFeatures.gaze(landmarksFile("look_down.jpg")), neutral, 0.07, 0.04, 0.02));
+        assertEquals(FaceFeatures.Gaze.CENTER,
+                FaceFeatures.classifyGaze(neutral, neutral, 0.07, 0.04, 0.02));
+    }
+
+    @Test
+    void test_ear_drops_when_eyes_closed() throws Exception {
+        // SYNTHETIC: eyes painted over. Open EAR is about 0.25, closed about 0.05.
+        float[][] open = landmarksFile("neutral.jpg");
+        float[][] closed = landmarksFile("eyes_closed.jpg");
+        assertTrue(FaceFeatures.eyeAspectRatio(closed, FaceFeatures.EYE_LEFT) < 0.5 * FaceFeatures.eyeAspectRatio(open, FaceFeatures.EYE_LEFT));
+        assertTrue(FaceFeatures.eyesClosed(closed, 0.12));
+        assertTrue(!FaceFeatures.eyesClosed(open, 0.12));
     }
 }

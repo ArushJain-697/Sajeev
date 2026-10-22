@@ -262,3 +262,10 @@
   - MockAndroidSBI was checked on a recorded rCapture only; its discovery, info and stream are intent-based and not covered by this HTTP harness.
   - Part (b), liveness scenarios through the full engine, needs `LivenessService` (#34) and is not done.
   - The harness has not been run on a real device. It reads only the face modality.
+
+## #17 landmark integration + features: gaze and closed-eye on SYNTHETIC fixtures (23 Oct 2026)
+- Added `FaceFeatures.gaze` (iris offset inside the eye, both eyes averaged, x positive toward the person's own left), `classifyGaze` (relative to the person's neutral gaze; limits are parameters), and `eyesClosed`.
+- Fixtures: `testdata/fixtures-gaze/` (neutral, look_left, look_right, look_up, look_down, eyes_closed), made by `eval/rig/make_synthetic_gaze.py` from the public-domain face photo by moving the iris inside the eye or painting the eyes over. **They are synthetic. They are not people looking in different directions.**
+- Tests (2 new, pass): `test_gaze_direction_on_four_direction_fixtures` (LEFT, RIGHT, UP, DOWN, CENTER), `test_ear_drops_when_eyes_closed` (EAR 0.25 → about 0.05; closed at 0.12).
+- Limits used: horizontal 0.07, up 0.04, down 0.02 of the eye width (TARGET, picked on these fixtures; "down" needs a smaller limit than "up" on this face; this asymmetry may not hold on real faces).
+- **Status:** the ticket's Done-when ("all four gaze fixtures and a closed-eye fixture classify correctly") is met on synthetic data only. Real consented clips (#59) must replace these before any claim about real faces. Treated as done-on-synthetic so that #20 and #24 can proceed.

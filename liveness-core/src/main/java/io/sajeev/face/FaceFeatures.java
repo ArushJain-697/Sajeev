@@ -20,6 +20,13 @@ public final class FaceFeatures {
     static final int LIP_TOP = 13;
     static final int LIP_BOTTOM = 14;
 
+    /** Iris landmark ids (MediaPipe): the person's right eye (image left) and left eye (image right), 5 points each. */
+    static final int IRIS_RIGHT_FIRST = 468;
+    static final int IRIS_LEFT_FIRST = 473;
+
+    /** Gaze direction, as the person's own left and right. */
+    public enum Gaze { CENTER, LEFT, RIGHT, UP, DOWN }
+
     private FaceFeatures() {
     }
 
@@ -71,5 +78,62 @@ public final class FaceFeatures {
         double dx = a[0] - b[0];
         double dy = a[1] - b[1];
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    /**
+     * Iris offset inside the eye, averaged over both eyes: (iris centre minus eye midpoint) divided by eye width.
+     * x is positive toward the person's own left (the right of the camera image), y is positive downward.
+     * @param p landmarks (478 points)
+     * @return {x, y}
+     */
+    public static double[] gaze(float[][] p) {
+        double[] a = irisOffset(p, IRIS_RIGHT_FIRST, EYE_RIGHT);
+        double[] b = irisOffset(p, IRIS_LEFT_FIRST, EYE_LEFT);
+        return new double[] {(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0};
+    }
+
+    private static double[] irisOffset(float[][] p, int first, int[] eye) {
+        double cx = 0;
+        double cy = 0;
+        for (int i = 0; i < 5; i++) {
+            cx += p[first + i][0];
+            cy += p[first + i][1];
+        }
+        cx /= 5;
+        cy /= 5;
+        double mx = (p[eye[0]][0] + p[eye[3]][0]) / 2.0;
+        double my = (p[eye[0]][1] + p[eye[3]][1]) / 2.0;
+        double w = Math.abs(p[eye[3]][0] - p[eye[0]][0]);
+        return w <= 0 ? new double[] {0, 0} : new double[] {(cx - mx) / w, (cy - my) / w};
+    }
+
+    /**
+     * Classify the gaze relative to the person's neutral gaze (measured while they look at the camera).
+     * Limits are constructor-style parameters (TARGET, tune on DEV, #62); they are not literals in the logic.
+     * @param g the current gaze from {@link #gaze}
+     * @param neutral the gaze at rest
+     * @param horizontal least horizontal change that counts as LEFT or RIGHT
+     * @param up least upward change that counts as UP (a positive number)
+     * @param down least downward change that counts as DOWN (a positive number)
+     * @return the direction, or CENTER
+     */
+    public static Gaze classifyGaze(double[] g, double[] neutral, double horizontal, double up, double down) {
+        double dx = g[0] - neutral[0];
+        double dy = g[1] - neutral[1];
+        if (Math.abs(dx) >= horizontal && Math.abs(dx) >= Math.abs(dy)) {
+            return dx > 0 ? Gaze.LEFT : Gaze.RIGHT;
+        }
+        if (-dy >= up) {
+            return Gaze.UP;
+        }
+        if (dy >= down) {
+            return Gaze.DOWN;
+        }
+        return Gaze.CENTER;
+    }
+
+    /** @param p landmarks @param threshold EAR below this counts as closed (TARGET 0.12) @return true when both eyes are closed */
+    public static boolean eyesClosed(float[][] p, double threshold) {
+        return eyeAspectRatio(p, EYE_LEFT) < threshold && eyeAspectRatio(p, EYE_RIGHT) < threshold;
     }
 }
