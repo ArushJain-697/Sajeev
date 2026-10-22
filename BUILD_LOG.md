@@ -153,3 +153,10 @@
 - `MoireVoter`: ATTACK when at least 2 of the last 3 frames have share >= 0.20; ABSTAIN when the face crop is under 96 px or fewer than 2 frames are usable.
 - Tests (3): synthetic moiré → share above 0.20; clean crop → below 0.20; minimum crop size 96 px.
 - **Limits:** validated on one photo and one synthetic pattern only. The 0.20 limit is TARGET and must be tuned on real attack clips (DEV, #62). The voter-level frame counting is not yet covered by a test (it needs the detector).
+
+## #23 passive score + Decision Gate (22 Oct 2026): DONE
+- `io.sajeev.gate.DecisionGate`: S_passive = Σwp/Σw over non-ABSTAIN votes; precedence G1 (stream unusable → CANNOT_JUDGE), G2 (≥2 ATTACK → PAD_FAIL), G3 (score ≥ threshold, 0 ATTACK, ≥ minLiveVotes LIVE → PASSIVE_PASS), G4 (ACTIVE_REQUIRED, strict when exactly one ATTACK), G5 (active disabled → LIVENESS_NOT_ESTABLISHED).
+- All-abstain never passes (score 0, ACTIVE_REQUIRED).
+- Tests (6): the six claims from BUILD_MAP. The "243 combinations × bands" test checks four invariants over every combination and band, not a re-typed copy of the table.
+- G1 (stream unusable) path is implemented but has no dedicated test; add one with #34.
+- Gate outcome is its own enum in the gate package, so the frozen `GateResult` API is unchanged. LIVENESS_NOT_ESTABLISHED lives there, not in the API.
