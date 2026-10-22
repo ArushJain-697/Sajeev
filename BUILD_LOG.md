@@ -32,3 +32,9 @@
   - The limits are constructor arguments now. They move into config when #17/#28 wire them (P-H).
   - Blurry fixture: YuNet loses the face, so the state is FACE_NOT_DETECTED. The blur metric still measures far below the limit.
   - The image decoder is javax.imageio (desktop only). The Android decoder is a separate ticket (P0-10, #51/#54).
+
+## #18 Voter V1 texture CNN (22 Oct 2026)
+- `io.sajeev.passive.texture.MiniFasNetModel`: one MiniFASNet ONNX model, crop as in generate_patches.py (scale 2.7 / 4.0), resize 80x80, BGR, 0..1.
+- `TextureCnnVoter`: averages V2 and V1SE live probability (never the max), ABSTAIN between thresholds (0.80 / 0.20 TARGET, DEV tuning only), ABSTAIN on engine error or when there is not exactly one face.
+- Tests: `test_onnx_matches_pytorch_within_1e_4` (Java ORT vs PyTorch reference, both models, 0 skipped) and `test_abstains_between_thresholds`.
+- **Not tested here:** whether V1 catches a printed photo or a screen replay. That is the attack evaluation (#59–#63), not a unit test.

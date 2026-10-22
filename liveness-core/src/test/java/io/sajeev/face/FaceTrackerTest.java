@@ -22,8 +22,8 @@ class FaceTrackerTest {
 
     private static Path modelPath() {
         String dir = System.getProperty("sajeev.models", System.getenv("SAJEEV_MODELS"));
-        assumeTrue(dir != null, "set -Dsajeev.models=<dir with face_detection_yunet_2023mar.onnx> to run");
-        Path p = Paths.get(dir, "face_detection_yunet_2023mar.onnx");
+        assumeTrue(dir != null, "set -Dsajeev.models=<dir with yunet/ and minifasnet/> to run");
+        Path p = Paths.get(dir, "yunet", "face_detection_yunet_2023mar.onnx");
         assumeTrue(Files.exists(p), "YuNet model not found at " + p);
         return p;
     }
