@@ -57,3 +57,13 @@
 - **Not done here:** capture returns an ISO record with a JPEG 2000 image. `capture()` refuses it (INVALID_FRAME_DATA) until a JP2 decoder is wired (#51/#54). `captureRecord()` returns the raw signed bytes.
 - Error-code mapping (codes 100–112, 5xx) is #38, not done.
 - Stream fps is not measured in the adapter: FrameGuard (#15) does that.
+
+## #38 device error mapping + measured fps (22 Oct 2026)
+- `SbiErrorMap`: every code in MockMDS `application.properties` mapped to one of our 13 states, or left as ENGINE_ERROR on purpose (live-stream and auth-only codes). Test checks every mock code is either mapped or on the deliberate list.
+- Stream health now reports measured fps from FrameGuard (#15).
+- Tests: `SbiErrorMapTest` (3), plus `test_capabilities_report_measured_fps` in the MockMDS contract test.
+- **Finding that changes plans:** the MockMDS stream runs at about **30 fps** (gaps 31–35 ms, measured 22 Oct 2026), not one frame per 3 s as its code comment says. So the 3-fps trap cannot be reproduced with the stock mock. #37 must add a fps-based schedule (already in its spec) and #61 must use it to make 3 fps.
+- The earlier contract test that said "3 s" was corrected: it now checks the PDF minimum of 3 fps (gap ≤ 334 ms).
+
+## #36 Sbi095HttpAdapter: DEFERRED
+- Spec says "wrap, don't rewrite" the client's existing 0.9.5 providers. Those live in the registration-client fork, which is WS2 work (#40+), and there are no recorded 0.9.5 responses here. Not started, so nothing is claimed.

@@ -36,7 +36,7 @@ class Sbi10HttpAdapterContractTest {
     }
 
     @Test
-    void test_stream_returns_frames_at_least_every_3s() throws Exception {
+    void test_stream_returns_frames_at_least_3_fps() throws Exception {
         assumeTrue(mockMdsUp(), "MockMDS not running on 127.0.0.1:4501");
         Sbi10HttpAdapter a = new Sbi10HttpAdapter("127.0.0.1", 4501, 4600, 15000);
         String id = a.discover().get(0).id();
@@ -45,7 +45,8 @@ class Sbi10HttpAdapterContractTest {
             Optional<Frame> f2 = src.next(10_000);
             assertTrue(f1.isPresent() && f2.isPresent(), "two frames expected");
             long gapMs = (f2.get().arrivalNanos() - f1.get().arrivalNanos()) / 1_000_000L;
-            assertTrue(gapMs <= 3_500L, "frame gap " + gapMs + " ms; MockMDS promises about 3 s");
+            // PDF minimum is 3 fps, so a gap above 333 ms breaks the requirement
+            assertTrue(gapMs <= 334L, "frame gap " + gapMs + " ms; minimum is 3 fps");
         }
     }
 
@@ -57,5 +58,19 @@ class Sbi10HttpAdapterContractTest {
         byte[] record = a.captureRecord(id);
         assertTrue(record.length > 1000, "record too small: " + record.length);
         assertEquals("FAC", new String(record, 0, 3, "ISO-8859-1"), "ISO 19794-5 face magic");
+    }
+
+    @Test
+    void test_capabilities_report_measured_fps() throws Exception {
+        assumeTrue(mockMdsUp(), "MockMDS not running on 127.0.0.1:4501");
+        Sbi10HttpAdapter a = new Sbi10HttpAdapter("127.0.0.1", 4501, 4600, 15000);
+        String id = a.discover().get(0).id();
+        try (FrameSource src = a.openStream(id)) {
+            src.next(10_000);
+            src.next(10_000);
+            double fps = src.health().measuredFps();
+            // Measured 22 Oct 2026: MockMDS streams about 30 fps (gaps 31-35 ms), not one frame per 3 s
+            assertTrue(fps > 20.0 && fps < 40.0, "measured fps " + fps);
+        }
     }
 }

@@ -12,7 +12,9 @@ import io.sajeev.api.FaceCaptureDevice;
 import io.sajeev.api.Frame;
 import io.sajeev.api.FrameSource;
 import io.sajeev.api.StreamHealth;
+import io.sajeev.frame.FrameGuard;
 import io.sajeev.frame.MjpegParser;
+import io.sajeev.frame.ProcessingMode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -222,33 +224,33 @@ public final class Sbi10HttpAdapter implements FaceCaptureDevice {
         }
     }
 
-    /** Frames from an open SBI stream. Arrival time is measured here (System.nanoTime). */
+    /** Frames from an open SBI stream. Arrival time is measured here (System.nanoTime); fps comes from FrameGuard. */
     private static final class SbiFrameSource implements FrameSource {
         private final RawSbiHttp.StreamHandle handle;
         private final MjpegParser parser;
+        private final FrameGuard guard;
         private long seq;
 
         SbiFrameSource(RawSbiHttp.StreamHandle handle) throws IOException {
             this.handle = handle;
             this.parser = new MjpegParser(handle.body(), "BoundaryString");
+            // minFps 0.1: this source only reports what it measures; the policy decides what is too slow
+            this.guard = new FrameGuard(System::nanoTime, 0.1, ProcessingMode.CONTINUOUS, 1);
         }
 
         @Override
         public Optional<Frame> next(long timeoutMillis) throws DeviceException {
-            try {
-                byte[] jpeg = parser.next();
-                if (jpeg == null) {
-                    throw new DeviceException(ErrorState.DEVICE_DISCONNECTED, "stream ended");
-                }
-                return Optional.of(new Frame(jpeg, System.nanoTime(), seq++));
-            } catch (DeviceException e) {
-                throw e; // a stall or a broken stream is reported as DEVICE_DISCONNECTED; FrameGuard watches the gaps
+            byte[] jpeg = parser.next(); // a broken stream throws DEVICE_DISCONNECTED; FrameGuard watches the gaps
+            if (jpeg == null) {
+                throw new DeviceException(ErrorState.DEVICE_DISCONNECTED, "stream ended");
             }
+            guard.onArrival(true);
+            return Optional.of(new Frame(jpeg, System.nanoTime(), seq++));
         }
 
         @Override
         public StreamHealth health() {
-            return new StreamHealth(0.0, seq, 0L);
+            return new StreamHealth(guard.measuredFps(), seq, 0L);
         }
 
         @Override
