@@ -135,3 +135,9 @@
 - `DISCLOSURES.md`: every dependency in use plus the planned ones, with VERIFIED or UNVERIFIED status. YuNet's source and licence are now confirmed.
 - `NOTICE`: written from DISCLOSURES.md.
 - Still open (not claimed as done): the MiniFASNet weights licence, the MediaPipe model card terms, Flutter's packages, ffmpeg build configuration.
+
+## #22 V5 reflection voter, PARTIAL (22 Oct 2026)
+- `ReflectionVoter`: near-white, low-saturation glare share in the face box, compared with the same frame outside the face. ATTACK if the face glares above a limit and at least `ratioLimit` times the background. ABSTAIN in extreme dark or bright light.
+- Tests (3, SYNTHETIC glare on the public-domain photo): glossy glare → ATTACK; matte skin → LIVE; extreme dark → ABSTAIN.
+- **Not done:** the chroma statistics half of the spec. Without it V5 uses glare only. No threshold uses skin tone.
+- Limits are TARGET values and are not tuned on real prints (#62).
