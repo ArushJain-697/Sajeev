@@ -173,3 +173,12 @@
 - Tests (3, all pass, no live device needed): `test_095_stream_and_capture_parse`, `test_095_stream_frames_parse_from_recording`, `test_095_adapter_refuses_a_1_0_only_device`.
 - **Caveat 1, important:** MockMDS reports serviceVersion 0.9.5 for every device. So the "SBI 1.0" contract tests (#35) were also run against 0.9.5 responses. We have no real 1.0 device or 1.0 mock to test 1.0 against.
 - **Caveat 2, per the ticket's "wrap, don't rewrite":** the client's own `MosipDeviceSpecification_*_ProviderImpl` classes live in the registration-client fork (WS2, #40+). This adapter does not call them yet. It parses the same wire format directly.
+
+## #40 registration-api SPI + stub (23 Oct 2026): DONE in a build copy; saved as a patch
+- Built in `tools-local/build/registration-client-1.2.0.x` (the desktop line primary per the #05 fallback). Patch: `integrations/patches/0001-registration-api-liveness-spi.patch` (against c1cc4e7).
+- `LivenessFacade` follows the `DocScannerFacade` pattern (Spring `@Component`, `List<...Service>` injection). Fails closed: no service, a null result, or a thrown error all give UNAVAILABLE, never LIVE.
+- `LivenessStubImpl` (stub-impl module) always returns UNAVAILABLE.
+- Tests (3, all pass with Maven on JDK 11): `test_facade_delegates_to_registered_service`, `test_no_service_fails_closed`, `test_stub_never_reports_live`.
+- **Caveat:** the stub module had no JUnit dependency, so one was added to its test scope (in the patch).
+- **Pre-existing, not ours:** `DocScannerUtilTest.conversionTest` fails in this environment with "No toolkit found" (AWT in a headless Mac session). It fails in the untouched client too, so it is not a result of this change.
+- The engine-side service that implements `LivenessService` is #34, not done.

@@ -1,0 +1,226 @@
+diff --git a/registration/registration-api-stub-impl/pom.xml b/registration/registration-api-stub-impl/pom.xml
+index 6500c6d..c0005af 100644
+--- a/registration/registration-api-stub-impl/pom.xml
++++ b/registration/registration-api-stub-impl/pom.xml
+@@ -57,7 +57,12 @@
+              <scope>compile</scope>
+         </dependency>
+ 
+-    </dependencies>
++        <dependency>
++      <groupId>junit</groupId>
++      <artifactId>junit</artifactId>
++      <scope>test</scope>
++    </dependency>
++  </dependencies>
+          <build>
+              <plugins>
+                <plugin>
+diff --git a/registration/registration-api-stub-impl/src/main/java/io/mosip/registration/api/impl/liveness/LivenessStubImpl.java b/registration/registration-api-stub-impl/src/main/java/io/mosip/registration/api/impl/liveness/LivenessStubImpl.java
+new file mode 100644
+index 0000000..06d7607
+--- /dev/null
++++ b/registration/registration-api-stub-impl/src/main/java/io/mosip/registration/api/impl/liveness/LivenessStubImpl.java
+@@ -0,0 +1,24 @@
++package io.mosip.registration.api.impl.liveness;
++
++import java.util.List;
++
++import org.springframework.stereotype.Component;
++
++import io.mosip.registration.api.liveness.LivenessResult;
++import io.mosip.registration.api.liveness.LivenessOutcome;
++import io.mosip.registration.api.liveness.LivenessService;
++
++/** Stub liveness service: always UNAVAILABLE. It must never report LIVE (fail closed). */
++@Component
++public class LivenessStubImpl implements LivenessService {
++
++    @Override
++    public String getServiceName() {
++        return "liveness-stub";
++    }
++
++    @Override
++    public LivenessResult evaluate(String workflow, List<byte[]> frameJpegs) {
++        return new LivenessResult(LivenessOutcome.UNAVAILABLE, "stub_no_engine");
++    }
++}
+diff --git a/registration/registration-api-stub-impl/src/test/java/io/mosip/registration/api/impl/liveness/LivenessStubImplTest.java b/registration/registration-api-stub-impl/src/test/java/io/mosip/registration/api/impl/liveness/LivenessStubImplTest.java
+new file mode 100644
+index 0000000..b2efce2
+--- /dev/null
++++ b/registration/registration-api-stub-impl/src/test/java/io/mosip/registration/api/impl/liveness/LivenessStubImplTest.java
+@@ -0,0 +1,17 @@
++package io.mosip.registration.api.impl.liveness;
++
++import static org.junit.Assert.assertFalse;
++
++import java.util.Collections;
++
++import org.junit.Test;
++
++public class LivenessStubImplTest {
++
++    @Test
++    public void test_stub_never_reports_live() {
++        LivenessStubImpl stub = new LivenessStubImpl();
++        assertFalse(stub.evaluate("RESIDENT", Collections.emptyList()).isLive());
++        assertFalse(stub.evaluate("OPERATOR", Collections.singletonList(new byte[] {1})).isLive());
++    }
++}
+diff --git a/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessFacade.java b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessFacade.java
+new file mode 100644
+index 0000000..921f9fc
+--- /dev/null
++++ b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessFacade.java
+@@ -0,0 +1,36 @@
++package io.mosip.registration.api.liveness;
++
++import java.util.List;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.stereotype.Component;
++
++/**
++ * Entry point for the registration client. Delegates to the first registered {@link LivenessService}.
++ * Fails closed: no service, or a service that throws, gives UNAVAILABLE, never LIVE.
++ */
++@Component
++public class LivenessFacade {
++
++    private static final Logger LOGGER = LoggerFactory.getLogger(LivenessFacade.class);
++
++    @Autowired(required = false)
++    private List<LivenessService> livenessServices;
++
++    public LivenessResult evaluate(String workflow, List<byte[]> frameJpegs) {
++        if (livenessServices == null || livenessServices.isEmpty()) {
++            LOGGER.warn("No liveness service registered: failing closed");
++            return new LivenessResult(LivenessOutcome.UNAVAILABLE, "no_liveness_service");
++        }
++        LivenessService service = livenessServices.get(0);
++        try {
++            LivenessResult r = service.evaluate(workflow, frameJpegs);
++            return r == null ? new LivenessResult(LivenessOutcome.UNAVAILABLE, "null_result") : r;
++        } catch (RuntimeException e) {
++            LOGGER.error("Liveness service " + service.getServiceName() + " failed", e);
++            return new LivenessResult(LivenessOutcome.UNAVAILABLE, "service_error");
++        }
++    }
++}
+diff --git a/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessOutcome.java b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessOutcome.java
+new file mode 100644
+index 0000000..819ce33
+--- /dev/null
++++ b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessOutcome.java
+@@ -0,0 +1,11 @@
++package io.mosip.registration.api.liveness;
++
++/** Result of a liveness check. Fail closed: only LIVE means the face may be accepted. */
++public enum LivenessOutcome {
++    /** The face passed liveness and PAD. */
++    LIVE,
++    /** A presentation attack or a failed check. Capture is refused. */
++    NOT_LIVE,
++    /** No engine is available or it failed. Never treated as LIVE. */
++    UNAVAILABLE
++}
+diff --git a/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessResult.java b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessResult.java
+new file mode 100644
+index 0000000..daa78e0
+--- /dev/null
++++ b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessResult.java
+@@ -0,0 +1,24 @@
++package io.mosip.registration.api.liveness;
++
++/** Outcome plus a short reason for audit. Immutable. */
++public final class LivenessResult {
++    private final LivenessOutcome outcome;
++    private final String reason;
++
++    public LivenessResult(LivenessOutcome outcome, String reason) {
++        this.outcome = outcome;
++        this.reason = reason;
++    }
++
++    public LivenessOutcome getOutcome() {
++        return outcome;
++    }
++
++    public String getReason() {
++        return reason;
++    }
++
++    public boolean isLive() {
++        return outcome == LivenessOutcome.LIVE;
++    }
++}
+diff --git a/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessService.java b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessService.java
+new file mode 100644
+index 0000000..7155544
+--- /dev/null
++++ b/registration/registration-api/src/main/java/io/mosip/registration/api/liveness/LivenessService.java
+@@ -0,0 +1,20 @@
++package io.mosip.registration.api.liveness;
++
++import java.util.List;
++
++/**
++ * SPI implemented by the liveness engine (or a stub). Registered as a Spring bean and picked up by
++ * {@link LivenessFacade}, the same way DocScannerService is picked up.
++ */
++public interface LivenessService {
++
++    /** @return a name for logs and audit */
++    String getServiceName();
++
++    /**
++     * @param workflow RESIDENT, OPERATOR or SUPERVISOR
++     * @param frameJpegs recent frames, JPEG bytes, oldest first
++     * @return the outcome for this window
++     */
++    LivenessResult evaluate(String workflow, List<byte[]> frameJpegs);
++}
+diff --git a/registration/registration-api/src/test/java/io/mosip/registration/api/liveness/LivenessFacadeTest.java b/registration/registration-api/src/test/java/io/mosip/registration/api/liveness/LivenessFacadeTest.java
+new file mode 100644
+index 0000000..2039270
+--- /dev/null
++++ b/registration/registration-api/src/test/java/io/mosip/registration/api/liveness/LivenessFacadeTest.java
+@@ -0,0 +1,34 @@
++package io.mosip.registration.api.liveness;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++
++import java.util.Collections;
++import java.util.List;
++
++import org.junit.Test;
++import org.springframework.test.util.ReflectionTestUtils;
++
++public class LivenessFacadeTest {
++
++    @Test
++    public void test_facade_delegates_to_registered_service() {
++        LivenessFacade f = new LivenessFacade();
++        LivenessService svc = new LivenessService() {
++            public String getServiceName() { return "fake"; }
++            public LivenessResult evaluate(String w, List<byte[]> frames) {
++                return new LivenessResult(LivenessOutcome.LIVE, "fake_live");
++            }
++        };
++        ReflectionTestUtils.setField(f, "livenessServices", Collections.singletonList(svc));
++        assertEquals(LivenessOutcome.LIVE, f.evaluate("RESIDENT", Collections.emptyList()).getOutcome());
++    }
++
++    @Test
++    public void test_no_service_fails_closed() {
++        LivenessFacade f = new LivenessFacade();
++        LivenessResult r = f.evaluate("RESIDENT", Collections.emptyList());
++        assertEquals(LivenessOutcome.UNAVAILABLE, r.getOutcome());
++        assertFalse(r.isLive());
++    }
++}
