@@ -67,3 +67,10 @@
 
 ## #36 Sbi095HttpAdapter: DEFERRED
 - Spec says "wrap, don't rewrite" the client's existing 0.9.5 providers. Those live in the registration-client fork, which is WS2 work (#40+), and there are no recorded 0.9.5 responses here. Not started, so nothing is claimed.
+
+## #32 signed model manifest (22 Oct 2026)
+- `ModelManifest`: plain-text canonical form (version + sorted file lines). Signature covers the whole canonical text.
+- `ModelVerifier`: checks the signature, then the version (refuses downgrade), then each file's size and SHA-256, all before anything is loaded into ONNX Runtime. Refusals carry a reason; the caller keeps the last good version.
+- **Deviation (D43):** ECDSA P-256 instead of Ed25519, because Ed25519 is missing on JDK 11.
+- Tests: 5 claims in `ModelVerifierTest` (tampered model, last-good kept after bad update, downgrade, unsigned, valid accepted). All pass.
+- **Not done:** the online sync itself (only verified offline at load, as the spec says), and key storage. Keys are generated in tests only; no key is committed.
