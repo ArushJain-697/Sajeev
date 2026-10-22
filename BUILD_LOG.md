@@ -236,3 +236,10 @@
 - Reading: on the emulator NNAPI is a CPU reference driver, not a real accelerator, so its speed says nothing about phones. Decision stays (R1-10): accelerators are **off by default**; an accelerator is enabled only when its output stays within a tolerance measured on the DEV set, on a real device. A real phone run is still needed.
 - **Finding for packaging:** the ONNX exports keep their weights in a `.onnx.data` sidecar (MiniFASNetV2: 268 KB model + 1.7 MB data). A session built from bytes fails ("file_size ... .onnx.data"). The signed manifest (#32), the Android assets and any jar must ship both files and load by path.
 - **Still not done:** Windows x64 (the Lenovo; optional) and a real-phone NNAPI measurement.
+
+## #33 execution providers, load shedding, degradation ladder (23 Oct 2026): DONE as policy logic
+- `ExecutionProviders.select(configured, available, evidence)`: `CPU` always means CPU; `AUTO` or a named provider uses an accelerator only when a recorded equivalence check exists and every record for it is within its tolerance. No evidence, or any failing record, gives CPU (D35, R1-10).
+- `LoadShedder.plan(queueDepth, processingMs, frameIntervalMs, cnnAvailable)`: drops the oldest frames beyond the queue limit; at moderate load runs the CNN on every third frame; at heavy load turns the CNN off and asks for a strict gate; the classical PAD voters always run. A missing CNN also means a strict gate (P-B degradation ladder).
+- `PERIODIC` frame mode already exists in FrameGuard (#15).
+- Tests (7, pass): `test_accelerator_disabled_when_output_differs` (uses the CoreML 0.00706 result from #10), `test_load_shedding_never_skips_pad_voters` (grid of 2 x 5 x 21 loads), plus AUTO without evidence, one failing record disables, CPU setting wins, overload ladder.
+- **Limits:** this is policy and not yet wired to ONNX Runtime session creation (that comes with #34). The load thresholds (1.0 and 2.5 times the frame interval) are TARGET values. No real overload was measured. The strict gate's exact settings are chosen by the policy engine (#28).
