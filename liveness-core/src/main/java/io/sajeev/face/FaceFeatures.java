@@ -1,0 +1,75 @@
+// #17 (WS1) | Bible §6.2, §6.6 | Head yaw, eye aspect ratio and mouth ratio from MediaPipe landmark indices. Java 11 only.
+// Indices are MediaPipe's, not dlib's (BUILD_MAP #17). Yaw sign: positive = the person's own left (R1-11).
+package io.sajeev.face;
+
+/** Pure geometry on the landmark array. No model, no I/O. */
+public final class FaceFeatures {
+
+    /** Nose tip. */
+    static final int NOSE = 1;
+    /** Points at the face edges, the person's right and left (MediaPipe ids). */
+    static final int EDGE_RIGHT = 234;
+    static final int EDGE_LEFT = 454;
+    /** Eye corners and lid points, MediaPipe ids. Left eye of the person (image right). */
+    static final int[] EYE_LEFT = {362, 385, 387, 263, 373, 380};
+    /** Right eye of the person (image left). */
+    static final int[] EYE_RIGHT = {33, 160, 158, 133, 153, 144};
+    /** Mouth corners and inner lips. */
+    static final int MOUTH_LEFT = 291;
+    static final int MOUTH_RIGHT = 61;
+    static final int LIP_TOP = 13;
+    static final int LIP_BOTTOM = 14;
+
+    private FaceFeatures() {
+    }
+
+    /**
+     * Yaw proxy in [-1, 1]: how far the nose sits towards the person's left edge, relative to the face width.
+     * 0 = facing the camera; sign is the person's left (positive). Not degrees; calibrated later.
+     * @param p landmarks
+     * @return the proxy
+     */
+    public static double yaw(float[][] p) {
+        double mid = (p[EDGE_LEFT][0] + p[EDGE_RIGHT][0]) / 2.0;
+        double width = Math.abs(p[EDGE_LEFT][0] - p[EDGE_RIGHT][0]);
+        if (width <= 0) {
+            return 0.0;
+        }
+        return 2.0 * (p[NOSE][0] - mid) / width;
+    }
+
+    /**
+     * Eye aspect ratio: vertical lid opening over horizontal eye width. About 0.3 open, below about 0.2 closed.
+     * @param p landmarks
+     * @param eye EYE_LEFT or EYE_RIGHT
+     * @return the ratio
+     */
+    public static double eyeAspectRatio(float[][] p, int[] eye) {
+        double v1 = dist(p[eye[1]], p[eye[5]]);
+        double v2 = dist(p[eye[2]], p[eye[4]]);
+        double h = dist(p[eye[0]], p[eye[3]]);
+        return h <= 0 ? 0.0 : (v1 + v2) / (2.0 * h);
+    }
+
+    /**
+     * Mouth aperture over mouth width (a smile widens, an open mouth raises the aperture).
+     * @param p landmarks
+     * @return aperture ratio
+     */
+    public static double mouthAspectRatio(float[][] p) {
+        double w = dist(p[MOUTH_LEFT], p[MOUTH_RIGHT]);
+        return w <= 0 ? 0.0 : dist(p[LIP_TOP], p[LIP_BOTTOM]) / w;
+    }
+
+    /** Mouth width over the face width. A smile raises it. */
+    public static double mouthWidthRatio(float[][] p) {
+        double faceW = Math.abs(p[EDGE_LEFT][0] - p[EDGE_RIGHT][0]);
+        return faceW <= 0 ? 0.0 : dist(p[MOUTH_LEFT], p[MOUTH_RIGHT]) / faceW;
+    }
+
+    private static double dist(float[] a, float[] b) {
+        double dx = a[0] - b[0];
+        double dy = a[1] - b[1];
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+}

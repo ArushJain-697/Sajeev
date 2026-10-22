@@ -108,3 +108,12 @@
 - CoreML execution provider is available from ORT Java 1.19.2 on this Mac. Probe (`liveness-core/src/test/java/io/sajeev/accel/AcceleratorProbeTest.java`, MiniFASNet V2 logits on a fixed input): max abs difference from CPU = **0.00706**. Our CPU parity limit is 1e-4.
 - Decision (R1-10): accelerator **disabled by default**. It may be enabled only if its difference is within a tolerance measured on the DEV set (#62). Until then every decision uses the CPU reference.
 - **Not done:** Windows x64 (Lenovo, optional), Android arm64 (NNAPI, #58), and the DEV-set tolerance (#62).
+
+## #17 landmark integration + features, PARTIAL (22 Oct 2026)
+- `io.sajeev.face.LandmarkModel`: MediaPipe 478-point model via ORT Java (input NHWC 256x256 RGB 0..1, checked against the TFLite export). Maps points back to frame pixels.
+- `io.sajeev.face.FaceFeatures`: yaw proxy (positive = person's own left), eye aspect ratio, mouth aperture and width. MediaPipe indices.
+- Tests (3, pass with the models): 478 points inside the frame; open eye EAR above 0.15; yaw sign flips on a mirrored fixture.
+- **Limits, stated plainly:**
+  - The yaw test uses a near-frontal photo (yaw ±0.04). It checks the sign convention, not a real head turn. A real left-turn clip is needed.
+  - **Not written:** `test_gaze_direction_on_four_direction_fixtures` and `test_ear_drops_when_eyes_closed`. They need the four-direction and closed-eye clips from #59. No fake fixtures were made.
+  - Yaw is a proxy in [-1, 1], not degrees. Calibration is later.
