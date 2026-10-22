@@ -88,7 +88,7 @@ public final class EngineSession implements LivenessSession {
     private long currentArrivalNanos;
     private long firstArrivalNanos = -1;
     private long usableCount;
-    private ErrorState lastTrackerError;
+    private volatile ErrorState lastTrackerError;
     private final long startedAtMillis = System.currentTimeMillis();
     private double avgProcessingMs;
     private long processed;
@@ -174,6 +174,11 @@ public final class EngineSession implements LivenessSession {
         if (c != null) {
             c.prompted(nowNanos, lastFrameSequence);
         }
+    }
+
+    /** @return why the newest frames could not be used (no face, many faces, poor quality, bad frames), or null when they are fine */
+    public ErrorState liveGuidance() {
+        return lastTrackerError;
     }
 
     /** @return the Binding result once checkCapture ran, else null */
