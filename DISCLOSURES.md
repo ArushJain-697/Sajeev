@@ -15,7 +15,7 @@ Every third-party component the repo uses, plus what we only plan. "Ours" means 
 | MiniFASNet weights (`2.7_80x80_MiniFASNetV2.pth`, `4_0_0_80x80_MiniFASNetV1SE.pth`) | **NO STATED LICENCE** | same repo, resources/anti_spoof_models | borrowed | **UNVERIFIED**: the repo states no licence for the weights. Must be resolved (pre-converted alternative with a stated licence, or a written permission) before any public release |
 | JTransforms (planned for FFT; we use our own FFT now) | BSD-2-Clause | github.com/wendykierp/JTransforms | PLANNED | VERIFIED: BSD-2 header read |
 | EJML (planned for matrix work) | Apache-2.0 | github.com/lessthanoptimal/ejml | PLANNED | VERIFIED: "released under the Apache v2.0 open source license" |
-| jqwik (planned property tests) | EPL-2.0 | github.com/jqwik-team/jqwik | PLANNED | VERIFIED: EPL-2.0 listed on the repo page |
+| jqwik (planned property tests) | EPL-2.0 | github.com/jqwik-team/jqwik | USED (test scope, 1.8.5) | VERIFIED: EPL-2.0 listed on the repo page |
 | MOSIP MockMDS (test fixture only, run locally, not shipped) | MPL-2.0 | github.com/mosip/mosip-mock-services | borrowed (test) | MPL-2.0 per the repo's licence; not copied into this repo |
 | MOSIP android-camera-mds (MockAndroidSBI, build only, not shipped) | MPL-2.0 | github.com/mosip/android-camera-mds | borrowed (build only) | per the repo's licence; not copied into this repo |
 | Flutter SDK 3.10.4 and the Dart packages of the Android client (build only) | BSD-3 (Flutter) / per-package | flutter.dev, pub.dev | borrowed (build) | **UNVERIFIED**: packages of the Android client not yet audited |

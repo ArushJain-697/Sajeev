@@ -16,5 +16,12 @@
       <artifactId>onnxruntime</artifactId>
       <version>1.19.2</version>
     </dependency>
+    <!-- jqwik (EPL-2.0): property tests for the safety invariants (#31). Test scope only. -->
+    <dependency>
+      <groupId>net.jqwik</groupId>
+      <artifactId>jqwik</artifactId>
+      <version>1.8.5</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

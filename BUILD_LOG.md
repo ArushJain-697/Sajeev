@@ -314,3 +314,19 @@
 - `AttemptOracleAlert` (P-J): 5 PAD failures from one workstation within 10 minutes (TARGET) raise an alert; the workstation key is hashed and only an 8-character tag is exposed.
 - Tests (8, pass): ID block does not collide; no image, embedding or identifier accepted; score bands; hash chain detects edits and deletions; diagnostics off by default; operator only and never in packets; metrics keys fixed and no String parameter; the alert.
 - **Not done:** hooking these into each client's own audit framework (#45 desktop, #57 Android); the X-Ray panel screen itself (only the gatekeeper exists); persisting the audit log and metrics to disk (they are in memory and exportable as text); writing the alert as an audit record (the caller does that); the alert threshold and window are TARGET values.
+
+## #31 invariants + mutation harness (23 Oct 2026): DONE; found and fixed one real gate flaw
+- jqwik 1.8.5 (EPL-2.0, test scope) added. `Safeguards` (all rules on in production; only tests switch one off) and `SessionAcceptance` (the final ACCEPT/REJECT rule: live verdict AND bound capture; attacks veto) are new in `io.sajeev.session`. `DecisionGate` and `Binding` got overloads that expose the abstain rule and the timing check for the mutation harness only.
+- Property tests, 10,000 cases each, over the real `DecisionGate` and `Binding` with random event orders (late frames, duplicate verdicts, capture before verdict, swapped face, 0 or 2 faces): `test_I1_no_orphan_capture_10000_cases`, `test_I2_less_evidence_never_helps` (six ways to degrade evidence), `test_I3_veto_wins`. All pass.
+- **A real flaw the I2 probe found:** an ABSTAIN was left out of the score, so two weak LIVE voters abstaining could lift the score over 0.80 and turn ACTIVE_REQUIRED into PASSIVE_PASS (an attacker who can make a voter abstain gains). Fix in `DecisionGate`: a passive pass also needs the score with every abstainer counted at a neutral 0.5 to reach the threshold. The reported passive score is unchanged. Test `i2_abstaining_weak_live_voter_cannot_lift_the_score`. This tightens Bible 6.4's "score over non-ABSTAIN voters" (recorded as D46); honest sessions with one or two abstaining voters still pass when the others are confident.
+- Mutation harness (`MutationTest`, 20,000 seeded scenarios, false accept = accepted with the rule off but rejected with all rules on; the full rule set scores 0):
+
+| Rule switched off | False accepts out of 20000 |
+|---|---|
+| BINDING | 3618 |
+| ABSTAIN_RULE | 386 |
+| STRICT_MODE | 347 |
+| TIMING_CHECK | 1110 |
+| REEVALUATION | 700 |
+
+- Limits: the scenarios are synthetic (scripted votes, fixed embeddings), so the table shows each rule matters, not real-world rates. The re-evaluation result is a generated input here (the reevaluator itself is tested in #26). Strict-mode and re-evaluation rules are exercised through `SessionAcceptance`, not yet through a live `LivenessService` (#34).

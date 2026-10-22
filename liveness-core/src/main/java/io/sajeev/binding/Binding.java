@@ -50,6 +50,7 @@ public final class Binding {
     private final double geometryTolerance;
     private final long windowMarginMillis;
     private final int ringSize;
+    private final boolean timingCheckEnabled;
     private final List<Observation> ring = new ArrayList<>();
     private long liveVerdictNanos = -1;
 
@@ -61,6 +62,13 @@ public final class Binding {
      * @param ringSize how many of the best live observations to keep
      */
     public Binding(double embeddingThreshold, double geometryTolerance, long windowMarginMillis, int ringSize) {
+        this(embeddingThreshold, geometryTolerance, windowMarginMillis, ringSize, true);
+    }
+
+    /** Same, with the timing check exposed so the mutation harness (#31) can switch it off. Production passes true. */
+    public Binding(double embeddingThreshold, double geometryTolerance, long windowMarginMillis, int ringSize,
+                   boolean timingCheckEnabled) {
+        this.timingCheckEnabled = timingCheckEnabled;
         this.embeddingThreshold = embeddingThreshold;
         this.geometryTolerance = geometryTolerance;
         this.windowMarginMillis = windowMarginMillis;
@@ -118,7 +126,7 @@ public final class Binding {
             }
         }
         long allowedNanos = (captureTimeoutMillis + windowMarginMillis) * 1_000_000L;
-        if (liveVerdictNanos < 0 || captureArrivalNanos - liveVerdictNanos > allowedNanos) {
+        if (timingCheckEnabled && (liveVerdictNanos < 0 || captureArrivalNanos - liveVerdictNanos > allowedNanos)) {
             failed.add("timing");
         }
         return new Result(failed.isEmpty() ? Verdict.BOUND : Verdict.CAPTURE_UNBOUND, failed, best, geomDiff);

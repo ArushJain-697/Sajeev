@@ -64,6 +64,15 @@ public final class DecisionGate {
      */
     public static Decision decide(List<Vote> votes, double[] weights, boolean streamUsable, double threshold,
                                   int minLiveVotes, boolean activeEnabled) {
+        return decide(votes, weights, streamUsable, threshold, minLiveVotes, activeEnabled, true);
+    }
+
+    /**
+     * Same as {@link #decide(List, double[], boolean, double, int, boolean)} with the abstain rule exposed so the
+     * mutation harness (#31) can switch it off. Production code always passes true: ABSTAIN never counts as LIVE.
+     */
+    public static Decision decide(List<Vote> votes, double[] weights, boolean streamUsable, double threshold,
+                                  int minLiveVotes, boolean activeEnabled, boolean abstainNeverCountsAsLive) {
         if (votes.size() != weights.length) {
             throw new IllegalArgumentException("one weight per vote");
         }
@@ -74,8 +83,13 @@ public final class DecisionGate {
         int lives = 0;
         double num = 0.0;
         double den = 0.0;
+        double fillNum = 0.0; // score with every ABSTAIN counted at 0.5 (neutral), see I2
+        double fillDen = 0.0;
         for (int i = 0; i < votes.size(); i++) {
             Vote v = votes.get(i);
+            if (!abstainNeverCountsAsLive && v.label() == Vote.Label.ABSTAIN) {
+                v = new Vote(Vote.Label.LIVE, 1.0, "mutation: abstain counted as live"); // mutation only
+            }
             switch (v.label()) {
                 case ATTACK:
                     attacks++;
@@ -89,14 +103,21 @@ public final class DecisionGate {
             if (v.label() != Vote.Label.ABSTAIN) {
                 num += weights[i] * v.probability();
                 den += weights[i];
+                fillNum += weights[i] * v.probability();
+            } else {
+                fillNum += weights[i] * 0.5;
             }
+            fillDen += weights[i];
         }
         // All voters abstained: no score, so no pass (never a division by zero that passes)
         double score = den > 0 ? num / den : 0.0;
         if (attacks >= 2) {
             return new Decision(Outcome.PAD_FAIL, score, false); // G2
         }
-        if (den > 0 && score >= threshold && attacks == 0 && lives >= minLiveVotes) {
+        // I2 (Less-Evidence-Never-Helps): a voter that abstains must not raise the score. So the pass also needs the
+        // score with each abstainer counted at a neutral 0.5 (never above what a LIVE vote gives) to reach the threshold.
+        boolean neutralOk = fillDen > 0 && fillNum / fillDen >= threshold;
+        if (den > 0 && score >= threshold && neutralOk && attacks == 0 && lives >= minLiveVotes) {
             return new Decision(Outcome.PASSIVE_PASS, score, false); // G3
         }
         boolean strict = attacks == 1; // G4, strict when exactly one ATTACK
