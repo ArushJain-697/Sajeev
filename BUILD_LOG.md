@@ -228,3 +228,11 @@
 ## #11 Mac camera: attempted again 23 Oct, still pending Arush (23 Oct 2026)
 - `ffmpeg -f avfoundation` now lists modes for the MacBook Air camera (640x480 at 30 fps), but the capture command hangs waiting for frames. A macOS camera permission prompt for the terminal app is the likely cause. No frames were stored, and no file was kept.
 - To finish #11: allow Camera for the app that runs the terminal (System Settings > Privacy & Security > Camera), then run a 3-second timing test. Consent for any recording of a person stays under #59.
+
+## #10 ONNX Runtime accelerators: Android part (23 Oct 2026); Windows still open
+- Probe: `integrations/accelprobe` (test tooling; copy the two MiniFASNetV2 ONNX files into its `src/main/assets/`). ONNX Runtime Android 1.19.2 on the Android 13 arm64 emulator, MiniFASNetV2, the same fixed input as the PyTorch reference:
+  - **CPU:** works. Max abs error vs PyTorch **7.2e-7**, average **11.6 ms** per inference.
+  - **NNAPI:** available and runs. Max abs error vs PyTorch 4.8e-7, max difference vs the CPU path **3.6e-7**, average **31.5 ms** (slower than CPU).
+- Reading: on the emulator NNAPI is a CPU reference driver, not a real accelerator, so its speed says nothing about phones. Decision stays (R1-10): accelerators are **off by default**; an accelerator is enabled only when its output stays within a tolerance measured on the DEV set, on a real device. A real phone run is still needed.
+- **Finding for packaging:** the ONNX exports keep their weights in a `.onnx.data` sidecar (MiniFASNetV2: 268 KB model + 1.7 MB data). A session built from bytes fails ("file_size ... .onnx.data"). The signed manifest (#32), the Android assets and any jar must ship both files and load by path.
+- **Still not done:** Windows x64 (the Lenovo; optional) and a real-phone NNAPI measurement.

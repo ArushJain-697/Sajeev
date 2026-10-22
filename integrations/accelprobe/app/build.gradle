@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    compileSdkVersion 33
+    namespace 'io.sajeev.accelprobe'
+    defaultConfig {
+        applicationId "io.sajeev.accelprobe"
+        minSdkVersion 26
+        targetSdkVersion 30
+        versionCode 1
+        versionName "1.0"
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+dependencies {
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.19.2'
+}
