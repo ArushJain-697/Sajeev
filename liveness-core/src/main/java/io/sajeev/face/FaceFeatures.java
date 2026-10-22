@@ -11,9 +11,9 @@ public final class FaceFeatures {
     static final int EDGE_RIGHT = 234;
     static final int EDGE_LEFT = 454;
     /** Eye corners and lid points, MediaPipe ids. Left eye of the person (image right). */
-    static final int[] EYE_LEFT = {362, 385, 387, 263, 373, 380};
+    public static final int[] EYE_LEFT = {362, 385, 387, 263, 373, 380};
     /** Right eye of the person (image left). */
-    static final int[] EYE_RIGHT = {33, 160, 158, 133, 153, 144};
+    public static final int[] EYE_RIGHT = {33, 160, 158, 133, 153, 144};
     /** Mouth corners and inner lips. */
     static final int MOUTH_LEFT = 291;
     static final int MOUTH_RIGHT = 61;

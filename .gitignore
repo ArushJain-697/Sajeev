@@ -7,3 +7,4 @@ testdata/heldout/
 
 # Recorded clips and consent material never go in git (#59)
 eval/clips/
+.jqwik-database

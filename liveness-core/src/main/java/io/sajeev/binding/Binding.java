@@ -118,10 +118,10 @@ public final class Binding {
                 best = Math.max(best, SfaceEmbedder.cosine(o.embedding, captureEmbedding));
                 geomDiff = Math.min(geomDiff, GeometryRatios.maxRelativeDifference(captureGeometry, o.geometry));
             }
-            if (best < embeddingThreshold) {
+            if (!(best >= embeddingThreshold)) { // NaN (a zero vector) fails too
                 failed.add("embedding");
             }
-            if (geomDiff > geometryTolerance) {
+            if (!(geomDiff <= geometryTolerance)) {
                 failed.add("geometry");
             }
         }

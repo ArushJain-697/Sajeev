@@ -105,8 +105,9 @@ class InvariantsTest {
                 worse = new Scenario(v, sc.streamUsable, ChallengeSession.Outcome.CHALLENGE_TIMEOUT, sc.reeval,
                         sc.events, sc.captureIsSwap, sc.captureFaces, sc.captureDelayMillis);
                 break;
-            case 3: // re-evaluation does not clear
-                worse = new Scenario(v, sc.streamUsable, sc.active, ChallengeReevaluator.Finish.STRICT_NOT_CLEARED,
+            case 3: // re-evaluation does not clear (PAD_FAIL is already worse than not clearing, so it stays)
+                worse = new Scenario(v, sc.streamUsable, sc.active,
+                        sc.reeval == ChallengeReevaluator.Finish.OK ? ChallengeReevaluator.Finish.STRICT_NOT_CLEARED : sc.reeval,
                         sc.events, sc.captureIsSwap, sc.captureFaces, sc.captureDelayMillis);
                 break;
             case 4: { // fewer live observations kept for Binding (drop all of them)
