@@ -1,6 +1,6 @@
 # UI/UX specification (#12)
 
-**Status: written specification, not visual mockups.** Every one of the 15 PDF UI/UX items has a section below with its screen, its states and the message keys it uses (from `liveness-core/src/main/resources/guidance/`). Visual mockups (images or Figma) are still to be made from these sections. Nothing here claims a screenshot exists.
+**Status: written specification plus HTML mockups.** Every one of the 15 PDF UI/UX items has a section below with its screen, its states and the message keys it uses (from `liveness-core/src/main/resources/guidance/`). `mockups.html` (same folder) shows all 15 as hand-built pages, with a right-to-left toggle and a large-text toggle. They are mockups, not production UI, and no person has tested them. Figma-style artwork and icon design are not done.
 
 Both platforms use the same states, the same wording (same keys) and the same order. Desktop: JavaFX (FXML). Android: Flutter.
 
@@ -70,7 +70,13 @@ Both platforms use the same states, the same wording (same keys) and the same or
 - Arabic (ar) lays out right-to-left: arrows, progress dots and the oval guide mirror correctly (R2-5).
 - Touch targets at least 48 dp on Android.
 
+## Contrast check (computed, WCAG relative luminance)
+Light theme: text on card 16.56:1, muted text on card 7.61:1, white on primary 6.70:1, white on success 5.40:1, dark text on warning 9.11:1, white on danger 6.54:1, text on page 14.62:1. All above 4.5:1. The dark theme palette in `mockups.html` was not computed here.
+
+## Checked in a browser (23 Oct 2026)
+15 cards render; at 375 px wide there is no horizontal scroll; no raw message keys are shown to the reader.
+
 ## Not done here
-- Visual mockups, colour values and icon artwork.
+- Figma-style artwork and icon design.
 - User testing with real people (none planned before the held-out recording).
 - Arabic and French wording is a machine translation, not reviewed (see guidance bundles).

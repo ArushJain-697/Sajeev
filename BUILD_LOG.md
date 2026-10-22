@@ -210,3 +210,9 @@
 - **Not done (the ticket's "Done when"):** ARC, our Android client, receiving frames. That needs `AndroidSbiStreamAdapter` (#51) and the Android packaging (#48).
 - **Limits:** frames are MOCK (synthetic or replayed files), not the camera's picture. The `mock:true` flag is in the outer device-info JSON, not inside the signed `deviceInfo` token. The caller allow-list holds the ARC package name from the plan; it has not been exercised with ARC. The "mock" flag on the signed payload would need a change in the signing code.
 - Not done in this ticket: the `docs/PROPOSAL_SBI_ANDROID_STREAM.md` (#70, optional-last by D42).
+
+## #12 UX mockups (23 Oct 2026): DONE as HTML mockups, with limits
+- `docs/UIUX/mockups.html`: all 15 PDF UI/UX items as hand-built mockups (desktop and Android frames), with ARIA labels on the face guide and progress marks, right-to-left toggle, large-text toggle, light and dark themes.
+- Light-theme contrast computed: every pair at or above 4.5:1 (lowest 5.40:1). The dark palette was not computed.
+- Checked in the browser at 375 px: no horizontal scroll, 15 cards, no raw message keys.
+- **Limits:** these are mockups, not production screens; they are not user-tested; icons are emoji and shapes; Arabic and French wording is not rendered in the mockups (English text only); screen-reader behaviour was not tested with a real screen reader.
