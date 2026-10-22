@@ -182,3 +182,8 @@
 - **Caveat:** the stub module had no JUnit dependency, so one was added to its test scope (in the patch).
 - **Pre-existing, not ours:** `DocScannerUtilTest.conversionTest` fails in this environment with "No toolkit found" (AWT in a headless Mac session). It fails in the untouched client too, so it is not a result of this change.
 - The engine-side service that implements `LivenessService` is #34, not done.
+
+## #66 analysis docs (23 Oct 2026): DONE
+- `docs/ANALYSIS_DEVICE_INTEGRATION.md`: SBI methods (MOSIPDISC, RCAPTURE, STREAM, MOSIPDINFO) with file:line in the desktop client, provider selection by spec version, stream path, face record format, Android intent path.
+- `docs/ANALYSIS_FACE_WORKFLOWS.md`: resident, operator and supervisor flows on desktop and Android, with the liveness hook point for each. Confirmed: no liveness code exists in either client.
+- Line numbers refer to the pinned commits named in each file (desktop c1cc4e7, Android 6e1943c). Re-check if the pins change.
