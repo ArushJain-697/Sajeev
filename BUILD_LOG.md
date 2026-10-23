@@ -486,3 +486,5 @@
 - **Scans:** no secret-looking strings in tracked source; the only absolute home-directory paths were in a generated table (fixed in `docs/gen_test_cases.sh`). Patches and BUILD_LOG mention build-copy paths by design.
 - **Honesty check of claims made in the docs:** every number in `README.md`, `PERFORMANCE.md`, `DESIGN.md` and `BUILD_LOG.md` comes from a test or script run in this repo; all liveness and attack results are synthetic or from one still photo and say so; no APCER or BPCER is quoted. Open items stated in the docs: no recordings, no real phone, no MOSIP server run, unreviewed translations, unverified licences.
 - **Not done:** the final pass after the held-out report (#63) and demo (#73), re-checking every sentence against the final numbers, the freeze commit, and a clean clone check on a second machine.
+
+## #76 LEARN_EVERYTHING (23 Oct 2026): PARTIAL: a new section 0 (state of the build, what is not proven, the questions you will be asked) was added to `planning/LEARN_EVERYTHING.md` (local only, outside the repo). The full rewrite with measured numbers waits for the held-out report.
