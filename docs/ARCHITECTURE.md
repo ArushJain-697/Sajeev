@@ -45,4 +45,4 @@ Nothing in the engine calls a network. Configuration is read from the client's l
 
 ## Android
 
-Planned, not built: engine as an AAR with ONNX Runtime Android, a Pigeon bridge and a Flutter widget. The mock SBI frame feed (patch 0003) and the engine on the emulator are proven; the rest is open.
+Built and tested on the Android 13 arm64 emulator (not a phone): the engine as an AAR (`integrations/engine-android`; ONNX Runtime Android; the engine uses its own `PixelImage` because Android has no `java.awt`), the frame feed from the SBI app (`AndroidSbiStreamSource`; the patched mock provides it) or CameraX (`CameraXFrameSource`, optional), the capture-only LIMITED check (`CaptureOnlyChecker`), a Pigeon bridge (`LivenessApi`, `LivenessEvents`) and a Flutter widget (`LivenessPane`, goldens in `docs/UIUX/android`). The Android client changes are patches 0006 (bridge, widget, gate, face login and approval) and 0007 (config, languages, audit). A resident face is stored only if `LiveGate` says live and the capture is bound; face login and approval spend a single-use `FaceAuthTicket`. None of the Android flows has been run against a MOSIP server (see `SEQUENCES.md`).

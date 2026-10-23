@@ -61,6 +61,75 @@ sequenceDiagram
 
 Same as operator with `begin(SUPERVISOR)`, used by the reviewer path of `AuthenticationController` and by `EODAuthenticationController`. The "supervisor physically present" wording: the check shows that a live person was in front of the camera; it does not prove who that person is, the existing face match does.
 
-## Android (planned, not built)
+## Android resident {#android-resident}
 
-Resident, operator and supervisor on Android follow the same three steps (liveness first, capture, Binding, then the existing step). The resident capture runs through an intent to the SBI app, so liveness must finish before the intent is fired and Binding runs when the result returns. Operator and supervisor face login are new screens (the clients are password-only today). No diagram is drawn for code that does not exist.
+Matches `LivenessGate`, `LivenessApi`, `AndroidLivenessController` and `BiometricsDetailsApi.parseRCaptureResponse` (patch 0006). Not run on a screen.
+
+```mermaid
+sequenceDiagram
+  participant R as Resident
+  participant D as Flutter (LivenessGate dialog)
+  participant J as LivenessApi (Java)
+  participant C as AndroidLivenessController
+  participant F as SBI frame feed
+  participant E as Engine
+  participant B as BiometricsDetailsApi
+  participant S as SBI app (intent)
+  R->>D: tap Scan (Face)
+  D->>J: start(RESIDENT)
+  J->>C: start
+  C->>F: bind + subscribe
+  loop frames
+    F-->>C: JPEG (ack each)
+    C->>E: onFrame
+    E-->>C: guidance / challenge
+    C-->>D: progress event (main thread)
+  end
+  E-->>C: verdict LIVE
+  C-->>J: progress LIVE (LiveGate.markLive)
+  D->>B: invokeDiscoverSbi (SBI intents: discover, info, rcapture)
+  B->>S: RCAPTURE intent
+  S-->>B: ISO 19794-5 face (JPEG 2000)
+  B->>J: consumeLiveAndBind (JP2 to PNG)
+  J->>E: Binding check
+  alt live and bound
+    B->>B: store biometric in the registration
+  else refused
+    B-->>D: error LIVENESS_REFUSED (nothing stored)
+  end
+```
+
+## Android operator login by face {#android-operator}
+
+Matches `FaceAuthFlow`, `BiometricsDetailsApi.parseFaceAuthResponse`, `FaceAuthCheck`, `FaceAuthTicket` and `AuthenticationApi.loginWithFace`. Offline session only; needs `faceAuth.enabled = true`.
+
+```mermaid
+sequenceDiagram
+  participant O as Operator
+  participant L as Login page
+  participant G as FaceAuthFlow
+  participant B as BiometricsDetailsApi
+  participant K as FaceAuthCheck
+  participant T as FaceAuthTicket
+  participant A as AuthenticationApi
+  O->>L: user id, tap Login with face
+  L->>G: verify(user, OPERATOR)
+  G->>G: liveness dialog (as in the resident flow)
+  G->>B: invokeDiscoverSbi("faceAuth:user", Face)
+  B->>K: run(live and bound, 1:1 match with onboarded face)
+  alt live, bound, matched
+    K->>T: grant(user)
+    B-->>G: MATCH
+    G->>L: true
+    L->>A: loginWithFace(user)
+    A->>T: consume(user)  (single use, 60 s)
+    A-->>L: offline session
+  else any refusal
+    B-->>G: NO_MATCH or LIVENESS_REFUSED
+    G->>L: false (password login stays available)
+  end
+```
+
+## Android supervisor approval {#android-supervisor}
+
+Same as the operator login with `verify(user, SUPERVISOR)` from the approval dialog, and `PacketAuthenticationApi.authenticateWithFace(user)` spending the ticket instead of `loginWithFace`. The same dialog is used for the operator's post-registration authentication when the password is left empty (workflow OPERATOR).
