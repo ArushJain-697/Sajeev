@@ -27,3 +27,7 @@ mosip.registration.liveness.active.enabled=true
 mosip.registration.liveness.passive.minLiveVotes=3
 mosip.registration.liveness.model.manifest=models/manifest.json
 ```
+
+## Client-side keys (desktop, #45)
+
+The desktop client reads three of these itself with client-side defaults, so it works when the server sends nothing: `mosip.registration.liveness.enabled` (default true; only the exact value `false` turns liveness off), `.maxRetries` (3) and `.sessionTimeoutMs` (45000, client only, not an engine key). A missing or invalid value falls back to the default and never turns liveness off.
