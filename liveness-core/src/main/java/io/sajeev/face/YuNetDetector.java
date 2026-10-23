@@ -7,10 +7,7 @@ import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.OrtSession.Result;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
+import io.sajeev.image.PixelImage;
 import java.nio.FloatBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -46,22 +43,17 @@ public final class YuNetDetector implements AutoCloseable {
      * @return boxes in the image's own pixel coordinates, best first
      * @throws OrtException if inference fails
      */
-    public List<Detection> detect(BufferedImage image, double scoreThreshold, double nmsIou) throws OrtException {
+    public List<Detection> detect(PixelImage image, double scoreThreshold, double nmsIou) throws OrtException {
         int W = image.getWidth();
         int H = image.getHeight();
-        BufferedImage bgr = new BufferedImage(INPUT, INPUT, BufferedImage.TYPE_3BYTE_BGR);
-        Graphics2D g = bgr.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(image, 0, 0, INPUT, INPUT, null);
-        g.dispose();
-        byte[] px = ((DataBufferByte) bgr.getRaster().getDataBuffer()).getData();
-
+        PixelImage small = image.resize(INPUT, INPUT);
         float[] chw = new float[3 * INPUT * INPUT];
         int plane = INPUT * INPUT;
         for (int i = 0; i < plane; i++) {
-            chw[i] = px[i * 3] & 0xFF;               // B
-            chw[plane + i] = px[i * 3 + 1] & 0xFF;   // G
-            chw[2 * plane + i] = px[i * 3 + 2] & 0xFF; // R
+            int rgb = small.getRGB(i % INPUT, i / INPUT);
+            chw[i] = rgb & 0xFF;                      // B
+            chw[plane + i] = (rgb >> 8) & 0xFF;       // G
+            chw[2 * plane + i] = (rgb >> 16) & 0xFF;  // R
         }
         float[] raw;
         try (OnnxTensor in = OnnxTensor.createTensor(env, FloatBuffer.wrap(chw), new long[] {1, 3, INPUT, INPUT});

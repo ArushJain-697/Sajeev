@@ -12,7 +12,8 @@ import io.sajeev.face.LandmarkModel;
 import io.sajeev.face.YuNetDetector;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.AwtDecoder;
+import io.sajeev.image.PixelImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -38,14 +39,10 @@ class BindingModelTest {
     }
 
     /** Re-encode: scale to 80%, darken a little, JPEG quality 0.5. A different size and compression, like a stored capture. */
-    private static BufferedImage reencode(BufferedImage src) throws Exception {
+    private static PixelImage reencode(PixelImage src) throws Exception {
         int w = (int) (src.getWidth() * 0.8);
         int h = (int) (src.getHeight() * 0.8);
-        BufferedImage small = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = small.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(src, 0, 0, w, h, null);
-        g.dispose();
+        PixelImage small = src.resize(w, h);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 int rgb = small.getRGB(x, y);
@@ -61,12 +58,12 @@ class BindingModelTest {
         param.setCompressionQuality(0.5f);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         writer.setOutput(ImageIO.createImageOutputStream(bos));
-        writer.write(null, new IIOImage(small, null, null), param);
+        writer.write(null, new IIOImage(io.sajeev.testutil.TestImg.toBuf(small), null, null), param);
         writer.dispose();
-        return ImageIO.read(new ByteArrayInputStream(bos.toByteArray()));
+        return AwtDecoder.from(ImageIO.read(new ByteArrayInputStream(bos.toByteArray())));
     }
 
-    private static float[][] landmarks(Path root, BufferedImage img) throws Exception {
+    private static float[][] landmarks(Path root, PixelImage img) throws Exception {
         try (YuNetDetector det = new YuNetDetector(root.resolve("yunet/face_detection_yunet_2023mar.onnx"));
              LandmarkModel lm = new LandmarkModel(root.resolve("landmark/face_landmarks_detector.onnx"))) {
             List<Detection> faces = det.detect(img, 0.6, 0.3);
@@ -78,8 +75,8 @@ class BindingModelTest {
     @Test
     void test_same_face_after_reencoding_is_bound_by_both_signals() throws Exception {
         Path root = modelsRoot();
-        BufferedImage live = ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg"));
-        BufferedImage stored = reencode(live);
+        PixelImage live = AwtDecoder.from(ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg")));
+        PixelImage stored = reencode(live);
         float[][] lmLive = landmarks(root, live);
         float[][] lmStored = landmarks(root, stored);
         try (SfaceEmbedder sface = new SfaceEmbedder(root.resolve("sface/face_recognition_sface_2021dec.onnx"))) {
@@ -98,10 +95,10 @@ class BindingModelTest {
     @Test
     void test_a_noise_image_does_not_match_the_face() throws Exception {
         Path root = modelsRoot();
-        BufferedImage live = ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg"));
+        PixelImage live = AwtDecoder.from(ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg")));
         float[][] lm = landmarks(root, live);
         Random rnd = new Random(1);
-        BufferedImage noise = new BufferedImage(FaceAlignment.SIDE, FaceAlignment.SIDE, BufferedImage.TYPE_INT_RGB);
+        PixelImage noise = new PixelImage(FaceAlignment.SIDE, FaceAlignment.SIDE);
         for (int y = 0; y < FaceAlignment.SIDE; y++) {
             for (int x = 0; x < FaceAlignment.SIDE; x++) {
                 noise.setRGB(x, y, rnd.nextInt(0xFFFFFF));
@@ -118,7 +115,7 @@ class BindingModelTest {
         // The spec warns that alignment errors cause false rejects. Move every landmark by 3 px, then by 2 px the other
         // way and rotate slightly: the same face must still match with room to spare above the 0.363 threshold.
         Path root = modelsRoot();
-        BufferedImage live = ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg"));
+        PixelImage live = AwtDecoder.from(ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg")));
         float[][] lm = landmarks(root, live);
         try (SfaceEmbedder sface = new SfaceEmbedder(root.resolve("sface/face_recognition_sface_2021dec.onnx"))) {
             float[] base = sface.embed(FaceAlignment.align(live, lm));

@@ -2,7 +2,7 @@
 // Thresholds are constructor parameters, not literals. Their values are TARGET until calibrated on DEV (#62).
 package io.sajeev.face;
 
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 
 /** Measures a frame's face quality. Pure Java: no OpenCV, same code on desktop and Android (D23). */
 public final class FaceQuality {
@@ -43,7 +43,7 @@ public final class FaceQuality {
      * @param box the detected face, or null when there is no face (then the whole frame is measured)
      * @return the metrics
      */
-    public static Metrics measure(BufferedImage image, Detection box) {
+    public static Metrics measure(PixelImage image, Detection box) {
         int x0 = 0;
         int y0 = 0;
         int x1 = image.getWidth();

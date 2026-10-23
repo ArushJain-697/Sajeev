@@ -6,7 +6,7 @@ package io.sajeev.passive.reflection;
 
 import io.sajeev.api.Vote;
 import io.sajeev.face.Detection;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 
 /** Votes ATTACK when the face box is much more glaring than the background of the same frame. */
 public final class ReflectionVoter {
@@ -39,7 +39,7 @@ public final class ReflectionVoter {
      * @param face the detected face box in frame pixels
      * @return LIVE-side or ATTACK-side vote, or ABSTAIN under extreme lighting
      */
-    public Vote vote(BufferedImage frame, Detection face) {
+    public Vote vote(PixelImage frame, Detection face) {
         int[] fx = bounds(face, frame.getWidth(), frame.getHeight());
         double faceLuma = 0;
         int faceN = 0;

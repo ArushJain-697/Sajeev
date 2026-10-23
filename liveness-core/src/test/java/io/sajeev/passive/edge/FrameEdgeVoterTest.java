@@ -7,7 +7,8 @@ import io.sajeev.api.Vote;
 import io.sajeev.face.Detection;
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.AwtDecoder;
+import io.sajeev.image.PixelImage;
 import org.junit.jupiter.api.Test;
 
 class FrameEdgeVoterTest {
@@ -16,19 +17,19 @@ class FrameEdgeVoterTest {
     private static final FrameEdgeVoter V = new FrameEdgeVoter(0.5, 0.80, 12);
 
     /** A face-coloured box in a grey frame. SYNTHETIC: stands in for a face, not a real face. */
-    private static BufferedImage scene(boolean bezel) {
-        BufferedImage img = new BufferedImage(640, 480, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = img.createGraphics();
-        g.setColor(new Color(90, 90, 90));
-        g.fillRect(0, 0, 640, 480);
-        g.setColor(new Color(200, 160, 130));
-        g.fillOval(260, 170, 120, 150); // the "face"
-        if (bezel) {
-            g.setColor(new Color(20, 20, 20));
-            g.setStroke(new java.awt.BasicStroke(6));
-            g.drawRect(200, 120, 240, 240); // a phone bezel framing the face
-        }
-        g.dispose();
+    private static PixelImage scene(boolean bezel) {
+        PixelImage img = new PixelImage(640, 480);
+        io.sajeev.testutil.TestImg.draw(img, g -> {
+            g.setColor(new Color(90, 90, 90));
+            g.fillRect(0, 0, 640, 480);
+            g.setColor(new Color(200, 160, 130));
+            g.fillOval(260, 170, 120, 150); // the "face"
+            if (bezel) {
+                g.setColor(new Color(20, 20, 20));
+                g.setStroke(new java.awt.BasicStroke(6));
+                g.drawRect(200, 120, 240, 240); // a phone bezel framing the face
+            }
+        });
         return img;
     }
 

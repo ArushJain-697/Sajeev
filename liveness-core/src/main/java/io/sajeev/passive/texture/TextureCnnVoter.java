@@ -8,11 +8,11 @@ import io.sajeev.api.PadVoter;
 import io.sajeev.api.Vote;
 import io.sajeev.face.Detection;
 import io.sajeev.face.YuNetDetector;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.List;
-import javax.imageio.ImageIO;
+import io.sajeev.image.ImageCodec;
 
 /**
  * V1: averages the live probability of MiniFASNetV2 (scale 2.7) and MiniFASNetV1SE (scale 4.0).
@@ -53,7 +53,7 @@ public final class TextureCnnVoter implements PadVoter {
             return new Vote(Vote.Label.ABSTAIN, 0.0, "empty_window");
         }
         try {
-            BufferedImage img = ImageIO.read(new ByteArrayInputStream(window.get(window.size() - 1).jpeg()));
+            PixelImage img = ImageCodec.decode(window.get(window.size() - 1).jpeg());
             if (img == null) {
                 return new Vote(Vote.Label.ABSTAIN, 0.0, "undecodable_frame");
             }
@@ -63,7 +63,7 @@ public final class TextureCnnVoter implements PadVoter {
             }
             double p = (v2.liveProbability(img, faces.get(0)) + v1se.liveProbability(img, faces.get(0))) / 2.0;
             return new Vote(label(p), p, "texture_prob=" + String.format("%.3f", p));
-        } catch (IOException | OrtException e) {
+        } catch (OrtException e) {
             return new Vote(Vote.Label.ABSTAIN, 0.0, "engine_error");
         }
     }

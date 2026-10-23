@@ -2,7 +2,7 @@
 // Thresholds live in the voter, not here. Only a crop of at least MIN_SIDE px is measured (else ABSTAIN).
 package io.sajeev.passive.moire;
 
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 
 /** Pure measurement on a grey crop. No I/O, no model. */
 public final class MoireMeasure {
@@ -31,7 +31,7 @@ public final class MoireMeasure {
      * @param grey a grey crop (any size >= MIN_SIDE on each side)
      * @return share of non-DC spectral energy in isolated peaks, in [0, 1]
      */
-    public static double peakEnergyShare(BufferedImage grey) {
+    public static double peakEnergyShare(PixelImage grey) {
         double[] re = new double[N * N];
         double[] im = new double[N * N];
         double[] win = new double[N];
@@ -42,7 +42,7 @@ public final class MoireMeasure {
             for (int x = 0; x < N; x++) {
                 int sx = x * grey.getWidth() / N;
                 int sy = y * grey.getHeight() / N;
-                double v = (grey.getRaster().getSample(sx, sy, 0)) / 255.0;
+                double v = grey.grey(sx, sy) / 255.0;
                 re[y * N + x] = v * win[x] * win[y];
             }
         }

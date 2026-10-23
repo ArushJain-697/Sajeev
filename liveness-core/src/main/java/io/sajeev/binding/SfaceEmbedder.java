@@ -6,7 +6,7 @@ import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 import java.nio.FloatBuffer;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -28,7 +28,7 @@ public final class SfaceEmbedder implements AutoCloseable {
      * @return the 128-number embedding
      * @throws OrtException if inference fails
      */
-    public float[] embed(BufferedImage aligned) throws OrtException {
+    public float[] embed(PixelImage aligned) throws OrtException {
         int side = FaceAlignment.SIDE;
         float[] chw = new float[3 * side * side];
         int plane = side * side;

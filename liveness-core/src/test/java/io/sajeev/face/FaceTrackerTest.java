@@ -6,7 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.sajeev.api.ErrorState;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.AwtDecoder;
+import io.sajeev.image.PixelImage;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,14 +29,14 @@ class FaceTrackerTest {
         return p;
     }
 
-    private static BufferedImage fixture(String name) throws Exception {
+    private static PixelImage fixture(String name) throws Exception {
         File f = Paths.get("../testdata/fixtures-faces", name).toFile();
-        return ImageIO.read(f);
+        return AwtDecoder.from(ImageIO.read(f));
     }
 
     private static FaceTracker.State run(String fixture) throws Exception {
         try (YuNetDetector det = new YuNetDetector(modelPath())) {
-            BufferedImage img = fixture(fixture);
+            PixelImage img = fixture(fixture);
             List<Detection> found = det.detect(img, 0.6, 0.3);
             Detection box = found.size() == 1 ? found.get(0) : null;
             return TRACKER.assess(found, FaceQuality.measure(img, box));

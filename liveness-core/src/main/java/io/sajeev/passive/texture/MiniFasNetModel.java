@@ -8,10 +8,7 @@ import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.OrtSession.Result;
 import io.sajeev.face.Detection;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
+import io.sajeev.image.PixelImage;
 import java.nio.FloatBuffer;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -63,7 +60,7 @@ public final class MiniFasNetModel implements AutoCloseable {
      * @return live probability in [0, 1]
      * @throws OrtException if inference fails
      */
-    public double liveProbability(BufferedImage image, Detection face) throws OrtException {
+    public double liveProbability(PixelImage image, Detection face) throws OrtException {
         float[] l = logits(toChw(crop(image, face, scale)));
         return softmax(l)[1];
     }
@@ -72,7 +69,7 @@ public final class MiniFasNetModel implements AutoCloseable {
      * Crop around the face box, expanded by scale, clamped to the frame. Same arithmetic as
      * generate_patches.py _get_new_box, then resized to 80x80 (bilinear).
      */
-    static BufferedImage crop(BufferedImage src, Detection face, double scale) {
+    static PixelImage crop(PixelImage src, Detection face, double scale) {
         int srcW = src.getWidth();
         int srcH = src.getHeight();
         double boxW = face.w();
@@ -106,24 +103,20 @@ public final class MiniFasNetModel implements AutoCloseable {
         int y0 = (int) ly;
         int x1 = Math.max(x0 + 1, (int) rx);
         int y1 = Math.max(y0 + 1, (int) ry);
-        BufferedImage sub = src.getSubimage(x0, y0, Math.min(x1 + 1, srcW) - x0, Math.min(y1 + 1, srcH) - y0);
-        BufferedImage out = new BufferedImage(SIDE, SIDE, BufferedImage.TYPE_3BYTE_BGR);
-        Graphics2D g = out.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(sub, 0, 0, SIDE, SIDE, null);
-        g.dispose();
+        PixelImage sub = src.crop(x0, y0, Math.min(x1 + 1, srcW) - x0, Math.min(y1 + 1, srcH) - y0);
+        PixelImage out = sub.resize(SIDE, SIDE);
         return out;
     }
 
     /** BGR interleaved bytes to CHW floats in 0..1 (ToTensor). */
-    static float[] toChw(BufferedImage bgr) {
-        byte[] px = ((DataBufferByte) bgr.getRaster().getDataBuffer()).getData();
+    static float[] toChw(PixelImage bgr) {
         int plane = SIDE * SIDE;
         float[] chw = new float[3 * plane];
         for (int i = 0; i < plane; i++) {
-            chw[i] = (px[i * 3] & 0xFF) / 255f;
-            chw[plane + i] = (px[i * 3 + 1] & 0xFF) / 255f;
-            chw[2 * plane + i] = (px[i * 3 + 2] & 0xFF) / 255f;
+            int rgb = bgr.getRGB(i % SIDE, i / SIDE);
+            chw[i] = (rgb & 0xFF) / 255f;                  // B
+            chw[plane + i] = ((rgb >> 8) & 0xFF) / 255f;   // G
+            chw[2 * plane + i] = ((rgb >> 16) & 0xFF) / 255f; // R
         }
         return chw;
     }

@@ -7,9 +7,7 @@ import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.OrtSession.Result;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 import java.nio.FloatBuffer;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -39,20 +37,16 @@ public final class LandmarkModel implements AutoCloseable {
      * @return landmarks as float[POINTS][3] in frame pixel coordinates (x, y in frame px; z in model units)
      * @throws OrtException if inference fails
      */
-    public float[][] landmarks(BufferedImage frame, Detection face) throws OrtException {
+    public float[][] landmarks(PixelImage frame, Detection face) throws OrtException {
         double side = Math.max(face.w(), face.h()) * CROP_SCALE;
         double cx = face.x() + face.w() / 2;
         double cy = face.y() + face.h() / 2;
         double x0 = cx - side / 2;
         double y0 = cy - side / 2;
-        BufferedImage crop = new BufferedImage(SIDE, SIDE, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = crop.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(frame.getSubimage(clamp(x0, frame.getWidth()), clamp(y0, frame.getHeight()),
-                Math.max(1, Math.min(frame.getWidth() - clamp(x0, frame.getWidth()), (int) side)),
-                Math.max(1, Math.min(frame.getHeight() - clamp(y0, frame.getHeight()), (int) side))),
-                0, 0, SIDE, SIDE, null);
-        g.dispose();
+        int cx0 = clamp(x0, frame.getWidth());
+        int cy0 = clamp(y0, frame.getHeight());
+        PixelImage crop = frame.crop(cx0, cy0, Math.max(1, Math.min(frame.getWidth() - cx0, (int) side)),
+                Math.max(1, Math.min(frame.getHeight() - cy0, (int) side))).resize(SIDE, SIDE);
         // The exported model is NHWC (1 x 256 x 256 x 3), as the TFLite original: RGB, 0..1
         float[] hwc = new float[SIDE * SIDE * 3];
         for (int y = 0; y < SIDE; y++) {

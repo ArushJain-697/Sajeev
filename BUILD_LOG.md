@@ -389,3 +389,7 @@
 - Checked while writing: the challenge planner draws distinct types in random order per attempt (an earlier draft of the doc claimed more; corrected). The engine now passes the planner's 8 fps TARGET for blink (it passed 10 before).
 - **Limits stated in the docs:** Android sequences are not drawn because the Android screens do not exist; no result or APCER number exists; the model-manifest check is not yet called in the desktop bridge; nothing is lab-certified.
 - Not yet done: diagrams checked against final classes (#68 final pass, after Android); `ARCHITECTURE.md#streaming` for Android.
+
+## #48 prerequisite: the engine no longer uses java.awt (23 Oct 2026)
+- Found while starting #48: 12 engine files used `java.awt` / `javax.imageio`, which do not exist on Android, so the engine could not have run there. The plan had not recorded this. Fix: new `io.sajeev.image` package: `PixelImage` (own int-array RGB image with crop, bilinear resize, grey), `ImageCodec` (pluggable decoder; the desktop loads `AwtDecoder` by name, Android installs its own), and every engine class now uses `PixelImage`. Tests use `AwtDecoder.from` and a small drawing helper (`testutil/TestImg`).
+- Effect on numbers: the resize and the grey conversion are now our own code, not Java2D. All 138 liveness-core tests still pass, including the MiniFASNet comparison against the PyTorch reference logits and the voter fixtures, so the change stayed inside the existing tolerances. Moire and the other thresholds are still TARGET and not tuned.

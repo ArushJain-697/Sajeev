@@ -40,8 +40,8 @@ import io.sajeev.passive.reflection.ReflectionVoter;
 import io.sajeev.passive.texture.TextureCnnVoter;
 import io.sajeev.policy.PolicyEngine;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.ImageCodec;
+import io.sajeev.image.PixelImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.SecureRandom;
@@ -83,7 +83,7 @@ public final class EngineSession implements LivenessSession {
     private final Deque<Frame> usableFrames = new ArrayDeque<>();
     private final Deque<float[][]> usableLandmarks = new ArrayDeque<>();
     private final List<FrameFeatures> usableFeatures = new ArrayList<>();
-    private BufferedImage lastImage;
+    private PixelImage lastImage;
     private Detection lastFace;
     private long currentArrivalNanos;
     private long firstArrivalNanos = -1;
@@ -196,7 +196,7 @@ public final class EngineSession implements LivenessSession {
     public synchronized Binding.Result checkCapture(byte[] captureJpeg, long arrivalNanos, long captureTimeoutMillis) {
         Binding.Result r;
         try {
-            BufferedImage img = ImageIO.read(new ByteArrayInputStream(captureJpeg));
+            PixelImage img = ImageCodec.decode(captureJpeg);
             List<Detection> faces = img == null ? Collections.<Detection>emptyList() : engine.models.detector.detect(img, 0.6, 0.3);
             if (faces.size() == 1) {
                 float[][] lm = engine.models.landmarks.landmarks(img, faces.get(0));
@@ -288,12 +288,8 @@ public final class EngineSession implements LivenessSession {
         detector = null;
     }
 
-    private static BufferedImage decode(byte[] jpeg) {
-        try {
-            return ImageIO.read(new ByteArrayInputStream(jpeg));
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
+    private static PixelImage decode(byte[] jpeg) {
+        return ImageCodec.decode(jpeg); // null when undecodable
     }
 
     private void process(Frame f) throws Exception {
@@ -301,7 +297,7 @@ public final class EngineSession implements LivenessSession {
         if (firstArrivalNanos < 0) {
             firstArrivalNanos = f.arrivalNanos();
         }
-        BufferedImage img = decode(f.jpeg());
+        PixelImage img = decode(f.jpeg());
         boolean take = guard.onArrival(img != null);
         if (guard.flags().contains(FrameFlag.INVALID_FRAME_DATA) && img == null) {
             lastTrackerError = ErrorState.INVALID_FRAME_DATA;
@@ -498,7 +494,7 @@ public final class EngineSession implements LivenessSession {
     }
 
     /** A voter that works on one decoded frame, wrapped so the re-evaluation can run it on a window. */
-    private PadVoter imageVoter(String name, BiFunction<BufferedImage, Detection, Vote> fn) {
+    private PadVoter imageVoter(String name, BiFunction<PixelImage, Detection, Vote> fn) {
         return new PadVoter() {
             @Override
             public String name() {
@@ -508,7 +504,7 @@ public final class EngineSession implements LivenessSession {
             @Override
             public Vote vote(List<Frame> window) {
                 try {
-                    BufferedImage img = decode(window.get(window.size() - 1).jpeg());
+                    PixelImage img = decode(window.get(window.size() - 1).jpeg());
                     if (img == null) {
                         return new Vote(Vote.Label.ABSTAIN, 0.0, "undecodable_frame");
                     }

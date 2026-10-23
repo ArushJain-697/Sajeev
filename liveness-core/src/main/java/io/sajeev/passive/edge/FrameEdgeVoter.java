@@ -6,7 +6,7 @@ package io.sajeev.passive.edge;
 
 import io.sajeev.api.Vote;
 import io.sajeev.face.Detection;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 
 /** V4: finds axis-aligned straight edges that frame the face. */
 public final class FrameEdgeVoter {
@@ -31,7 +31,7 @@ public final class FrameEdgeVoter {
      * @param face the face box
      * @return ATTACK if all four sides of a frame edge enclose the face, LIVE-side otherwise, ABSTAIN when the face fills the frame
      */
-    public Vote vote(BufferedImage frame, Detection face) {
+    public Vote vote(PixelImage frame, Detection face) {
         int w = frame.getWidth();
         int h = frame.getHeight();
         double faceShare = (face.w() * face.h()) / ((double) w * h);
@@ -88,7 +88,7 @@ public final class FrameEdgeVoter {
     }
 
     /** Sobel magnitude on luma, thresholded at 40% of the frame's maximum. */
-    static boolean[] strongEdges(BufferedImage img) {
+    static boolean[] strongEdges(PixelImage img) {
         int w = img.getWidth();
         int h = img.getHeight();
         double[] mag = new double[w * h];
@@ -112,7 +112,7 @@ public final class FrameEdgeVoter {
         return out;
     }
 
-    private static double luma(BufferedImage img, int x, int y) {
+    private static double luma(PixelImage img, int x, int y) {
         int rgb = img.getRGB(x, y);
         return 0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF) + 0.114 * (rgb & 0xFF);
     }

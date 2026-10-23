@@ -11,7 +11,8 @@ import io.sajeev.face.Detection;
 import io.sajeev.face.FaceFeatures;
 import io.sajeev.face.LandmarkModel;
 import io.sajeev.face.YuNetDetector;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.AwtDecoder;
+import io.sajeev.image.PixelImage;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -28,7 +29,7 @@ class FlatnessVoterTest {
     private static float[][] base() throws Exception {
         String dir = System.getProperty("sajeev.models", System.getenv("SAJEEV_MODELS"));
         assumeTrue(dir != null, "set -Dsajeev.models=<dir>");
-        BufferedImage img = ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg"));
+        PixelImage img = AwtDecoder.from(ImageIO.read(new File("../testdata/fixtures-faces/one_face.jpg")));
         try (YuNetDetector det = new YuNetDetector(Paths.get(dir, "yunet", "face_detection_yunet_2023mar.onnx"));
              LandmarkModel lm = new LandmarkModel(Paths.get(dir, "landmark", "face_landmarks_detector.onnx"))) {
             List<Detection> faces = det.detect(img, 0.6, 0.3);

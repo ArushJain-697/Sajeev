@@ -2,7 +2,7 @@
 // The five points come from the MediaPipe landmarks (eye centres from the iris, nose tip, mouth corners).
 package io.sajeev.binding;
 
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 
 /** Warps a face to the ArcFace 112x112 template. Alignment errors cause false rejects, so the maths is tested. */
 public final class FaceAlignment {
@@ -73,11 +73,11 @@ public final class FaceAlignment {
      * @param landmarks the 478 landmarks of the single face in the frame
      * @return the aligned crop (RGB)
      */
-    public static BufferedImage align(BufferedImage img, float[][] landmarks) {
+    public static PixelImage align(PixelImage img, float[][] landmarks) {
         double[] t = similarity(fivePoints(landmarks), TEMPLATE);
         double a = t[0], b = t[1], tx = t[2], ty = t[3];
         double det = a * a + b * b;
-        BufferedImage out = new BufferedImage(SIDE, SIDE, BufferedImage.TYPE_INT_RGB);
+        PixelImage out = new PixelImage(SIDE, SIDE);
         for (int v = 0; v < SIDE; v++) {
             for (int u = 0; u < SIDE; u++) {
                 // inverse map: src = M^-1 (dst - t)
@@ -90,7 +90,7 @@ public final class FaceAlignment {
         return out;
     }
 
-    private static int bilinear(BufferedImage img, double x, double y) {
+    private static int bilinear(PixelImage img, double x, double y) {
         int w = img.getWidth();
         int h = img.getHeight();
         double cx = Math.max(0, Math.min(w - 1.001, x));

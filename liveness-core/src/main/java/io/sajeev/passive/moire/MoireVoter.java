@@ -8,11 +8,11 @@ import io.sajeev.api.PadVoter;
 import io.sajeev.api.Vote;
 import io.sajeev.face.Detection;
 import io.sajeev.face.YuNetDetector;
-import java.awt.image.BufferedImage;
+import io.sajeev.image.PixelImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.List;
-import javax.imageio.ImageIO;
+import io.sajeev.image.ImageCodec;
 
 /** V2: votes ATTACK on repeated moiré across recent frames. */
 public final class MoireVoter implements PadVoter {
@@ -41,7 +41,7 @@ public final class MoireVoter implements PadVoter {
         int counted = 0;
         for (Frame f : window.subList(from, window.size())) {
             try {
-                BufferedImage img = ImageIO.read(new ByteArrayInputStream(f.jpeg()));
+                PixelImage img = ImageCodec.decode(f.jpeg());
                 if (img == null) {
                     continue;
                 }
@@ -53,12 +53,12 @@ public final class MoireVoter implements PadVoter {
                 if (Math.min(d.w(), d.h()) < MoireMeasure.MIN_SIDE) {
                     return new Vote(Vote.Label.ABSTAIN, 0.0, "crop_under_96px");
                 }
-                BufferedImage crop = grey(img, d);
+                PixelImage crop = grey(img, d);
                 counted++;
                 if (MoireMeasure.peakEnergyShare(crop) >= shareLimit) {
                     flagged++;
                 }
-            } catch (IOException | ai.onnxruntime.OrtException e) {
+            } catch (ai.onnxruntime.OrtException e) {
                 return new Vote(Vote.Label.ABSTAIN, 0.0, "engine_error");
             }
         }
@@ -70,13 +70,12 @@ public final class MoireVoter implements PadVoter {
                 "moire_flagged=" + flagged + " of " + counted);
     }
 
-    private static BufferedImage grey(BufferedImage img, Detection d) {
+    private static PixelImage grey(PixelImage img, Detection d) {
         int x = (int) Math.max(0, Math.round(d.x()));
         int y = (int) Math.max(0, Math.round(d.y()));
         int w = (int) Math.min(img.getWidth() - x, Math.round(d.w()));
         int h = (int) Math.min(img.getHeight() - y, Math.round(d.h()));
-        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
-        out.createGraphics().drawImage(img.getSubimage(x, y, w, h), 0, 0, null);
+        PixelImage out = img.crop(x, y, w, h);
         return out;
     }
 }
