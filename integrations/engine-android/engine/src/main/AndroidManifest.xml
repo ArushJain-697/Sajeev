@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- #51: the SBI app's frame feed. Android 11+ hides other apps unless they are listed here. -->
     <uses-permission android:name="io.mosip.mock.sbi.permission.FRAME_FEED" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <queries>
         <package android:name="io.mosip.mock.sbi" />
     </queries>

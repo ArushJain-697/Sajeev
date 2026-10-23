@@ -20,6 +20,7 @@ Every third-party component the repo uses, plus what we only plan. "Ours" means 
 | MOSIP android-camera-mds (MockAndroidSBI, build only, not shipped) | MPL-2.0 | github.com/mosip/android-camera-mds | borrowed (build only) | per the repo's licence; not copied into this repo |
 | Flutter SDK 3.10.4 and the Dart packages of the Android client (build only) | BSD-3 (Flutter) / per-package | flutter.dev, pub.dev | borrowed (build) | **UNVERIFIED**: packages of the Android client not yet audited |
 | JaCoCo 0.8.11 (coverage, build only) | EPL-2.0 | github.com/jacoco/jacoco | borrowed (build) | licence from the project's published terms; not re-read in this run |
+| AndroidX CameraX 1.2.3 (optional camera source, #49) | Apache-2.0 | developer.android.com/jetpack/androidx/releases/camera | borrowed | standard Apache-2.0; not re-read |
 | ONNX Runtime Android 1.19.2 (`onnxruntime-android` AAR, shipped inside the Android build) | MIT | github.com/microsoft/onnxruntime | borrowed | MIT recorded in the earlier audit; not re-read |
 | AndroidX test runner and JUnit extension (instrumented tests only) | Apache-2.0 | developer.android.com/jetpack/androidx | borrowed (test) | standard Apache-2.0; not re-read |
 | Pigeon 10 (generates the Flutter-Java bridge code; already a dependency of the Android client) | BSD-3-Clause | pub.dev/packages/pigeon | borrowed (build) | **UNVERIFIED** in this run |
