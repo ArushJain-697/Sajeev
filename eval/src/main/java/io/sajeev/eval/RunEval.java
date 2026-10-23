@@ -44,6 +44,9 @@ public final class RunEval {
         String out = "metrics.json";
         double threshold = 0.80;
         int minLive = 3;
+        boolean heldout = false;
+        String rerun = null;
+        String evalDir = "eval";
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--manifest": manifest = args[++i]; break;
@@ -52,10 +55,27 @@ public final class RunEval {
                 case "--out": out = args[++i]; break;
                 case "--threshold": threshold = Double.parseDouble(args[++i]); break;
                 case "--min-live": minLive = Integer.parseInt(args[++i]); break;
+                case "--heldout": heldout = true; break;
+                case "--rerun": rerun = args[++i]; break;
+                case "--eval-dir": evalDir = args[++i]; break;
                 default:
                     System.err.println("unknown option " + args[i]);
                     System.exit(2);
             }
+        }
+        String configHash = null;
+        if (heldout) {
+            // the held-out set is evaluated only through the gate (HELDOUT_PROTOCOL section 4)
+            try {
+                configHash = FreezeHash.compute(Paths.get(models), commit());
+                HeldOutGate.check(Paths.get(evalDir), configHash, rerun);
+            } catch (HeldOutGate.Refused r) {
+                System.err.println("REFUSED: " + r.getMessage());
+                System.exit(4);
+            }
+            manifest = Paths.get(evalDir, "data", "heldout", "manifest.csv").toString();
+            clips = Paths.get(evalDir, "data", "heldout").toString();
+            out = Paths.get(evalDir, "metrics_heldout.json").toString();
         }
         if (manifest == null || clips == null || models == null) {
             System.err.println("usage: run_eval --manifest <csv> --clips <dir> --models <dir> --out <json> [--threshold N] [--min-live N]");
@@ -69,7 +89,20 @@ public final class RunEval {
             }
         }
         Files.write(Paths.get(out), Metrics.toJson(ps, threshold, minLive).getBytes(StandardCharsets.UTF_8));
+        if (heldout) {
+            Files.write(Paths.get(evalDir, "HELDOUT_REPORT.md"), HeldOutReport.markdown(ps, configHash).getBytes(StandardCharsets.UTF_8));
+        }
         System.out.println("wrote " + out + " for " + ps.size() + " presentations");
+    }
+
+    private static String commit() {
+        try {
+            Process p = new ProcessBuilder("git", "rev-parse", "HEAD").redirectErrorStream(true).start();
+            String h = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            return p.waitFor() == 0 ? h : "unknown";
+        } catch (IOException | InterruptedException e) {
+            return "unknown";
+        }
     }
 
     /** @return the rows (file, species, subject, device, fps) of a manifest.csv written by eval/ingest.sh */
