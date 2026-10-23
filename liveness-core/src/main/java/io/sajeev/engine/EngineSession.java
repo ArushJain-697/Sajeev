@@ -187,6 +187,11 @@ public final class EngineSession implements LivenessSession {
         return lastTrackerError;
     }
 
+    /** @return the frame rate the engine measured on the frames it received (0 until two have arrived) */
+    public double measuredFps() {
+        return guard.measuredFps();
+    }
+
     /** @return the Binding result once checkCapture ran, else null */
     public Binding.Result bindingResult() {
         return bindingResult;
