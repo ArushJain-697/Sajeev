@@ -1,0 +1,5 @@
+build/
+.gradle/
+local.properties
+engine/libs/*.jar
+engine/src/androidTest/assets/

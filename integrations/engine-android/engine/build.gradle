@@ -1,0 +1,27 @@
+// #48: the SAJEEV engine as an Android library (AAR). The two engine jars come from the Maven build (script: prepare.sh).
+plugins { id 'com.android.library' }
+android {
+    compileSdkVersion 33
+    namespace 'io.sajeev.engine.android'
+    defaultConfig {
+        minSdkVersion 26
+        targetSdkVersion 30
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles 'proguard-rules.pro'
+        }
+    }
+    packagingOptions { jniLibs { useLegacyPackaging = false } }
+    aaptOptions { noCompress 'onnx', 'data' }
+}
+dependencies {
+    api fileTree(dir: 'libs', include: ['*.jar'])
+    api 'com.microsoft.onnxruntime:onnxruntime-android:1.19.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+}

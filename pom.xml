@@ -31,6 +31,14 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- plain StringBuilder concatenation: Android's D8/R8 cannot read the Java 9+ StringConcatFactory form (#48) -->
+          <compilerArgs><arg>-XDstringConcat=inline</arg></compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
       </plugin>
