@@ -1,8 +1,8 @@
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
-index 921e4d4..9c71b06 100644
+index 921e4d4..57b60a4 100644
 --- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
 +++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
-@@ -191,7 +191,16 @@ public enum AuditEvent {
+@@ -191,7 +191,17 @@ public enum AuditEvent {
      BIO_SDK_QUALITY_SCORE_FAILED("REG-EVT-094", SYSTEM_EVENT.getCode(), "BIO_SDK_QUALITY_SCORE_FAILED", "Unable to fetch SDK quality score"),
      BIO_SDK_FILES_NOT_FOUND("REG-EVT-095", SYSTEM_EVENT.getCode(), "BIO_SDK_FILES_NOT_FOUND", "No biometric SDK files found in assets"),
      BIO_SDK_PROVIDER_REGISTERED("REG-EVT-096", SYSTEM_EVENT.getCode(), "BIO_SDK_PROVIDER_REGISTERED", "Biometric SDK provider registered"),
@@ -16,10 +16,49 @@ index 921e4d4..9c71b06 100644
 +    REG_LIVENESS_CHALLENGE_RESULT("REG-LIV-004", USER_EVENT.getCode(), "REG_LIVENESS_CHALLENGE_RESULT", "Active challenge result"),
 +    REG_LIVENESS_BINDING("REG-LIV-005", USER_EVENT.getCode(), "REG_LIVENESS_BINDING", "Captured face bound to the live face"),
 +    REG_LIVENESS_VERDICT("REG-LIV-006", USER_EVENT.getCode(), "REG_LIVENESS_VERDICT", "Liveness verdict"),
-+    REG_LIVENESS_ENGINE_UNAVAILABLE("REG-LIV-009", SYSTEM_EVENT.getCode(), "REG_LIVENESS_ENGINE_UNAVAILABLE", "Liveness engine unavailable");
++    REG_LIVENESS_ENGINE_UNAVAILABLE("REG-LIV-009", SYSTEM_EVENT.getCode(), "REG_LIVENESS_ENGINE_UNAVAILABLE", "Liveness engine unavailable"),
++    REG_LIVENESS_FACE_LOGIN("REG-LIV-010", USER_EVENT.getCode(), "REG_LIVENESS_FACE_LOGIN", "Login with face (liveness, binding and match)");
  
      AuditEvent(String id, String type, String name, String description) {
          this.id = id;
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
+index bec3131..39ac788 100644
+--- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
+@@ -131,6 +131,24 @@ public class Biometrics095Service extends BiometricsService {
+ 
+     public List<BiometricsDto> handleRCaptureResponse(Modality modality, InputStream response, List<String> exceptionAttributes, boolean isOperatorOnboarding)
+             throws BiometricsServiceException {
++        return handleRCaptureResponse(modality, response, exceptionAttributes, isOperatorOnboarding, false);
++    }
++
++    /** SAJEEV #55: parse a capture for face authentication: the operator de-duplication is skipped (the face IS an operator's). */
++    public List<BiometricsDto> handleRCaptureResponseForAuth(Modality modality, InputStream response, List<String> exceptionAttributes)
++            throws BiometricsServiceException {
++        return handleRCaptureResponse(modality, response, exceptionAttributes, false, true);
++    }
++
++    /** SAJEEV #55: 1:1 match of a captured face against the onboarded face of one user. */
++    public boolean matchOperatorFace(String userId, List<BiometricsDto> sample) {
++        IBioApiV2 provider = bioSdkProviderFactory != null ? bioSdkProviderFactory.getProviderForMatch(Modality.FACE) : null;
++        return MatchUtil.matchOperatorFace(userId, sample, userBiometricRepository, provider);
++    }
++
++    private List<BiometricsDto> handleRCaptureResponse(Modality modality, InputStream response, List<String> exceptionAttributes,
++                                                       boolean isOperatorOnboarding, boolean skipDedupe)
++            throws BiometricsServiceException {
+         List<BiometricsDto> biometricsDtoList = new ArrayList<>();
+         try {
+             CaptureResponse captureResponse = objectMapper.readValue(response, new TypeReference<CaptureResponse>(){});
+@@ -184,7 +202,7 @@ public class Biometrics095Service extends BiometricsService {
+                     }
+                 }
+ 
+-               if(RegistrationConstants.ENABLE.equalsIgnoreCase(sharedPreferences.getString(RegistrationConstants.DEDUPLICATION_ENABLE_FLAG, ""))) {
++               if(!skipDedupe && RegistrationConstants.ENABLE.equalsIgnoreCase(sharedPreferences.getString(RegistrationConstants.DEDUPLICATION_ENABLE_FLAG, ""))) {
+                     IBioApiV2 matchProvider = bioSdkProviderFactory != null ? bioSdkProviderFactory.getProviderForMatch(modality) : null;
+ 
+                     if (matchProvider == null) {
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
 new file mode 100644
 index 0000000..5056639
@@ -93,12 +132,44 @@ index 0000000..5056639
 +        }
 +    }
 +}
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java
+index 8f4063b..b918c4e 100644
+--- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java
+@@ -93,6 +93,27 @@ public class MatchUtil {
+         return matchBiometrics(biometricType, userBiometrics, biometricsDtoList, iBioApiV2);
+     }
+ 
++    /**
++     * SAJEEV #55: 1:1 face authentication. Matches the captured face only against the onboarded face of {@code userId}
++     * (never against other operators). False when that user has no onboarded face, or the SDK says no match.
++     */
++    public static boolean matchOperatorFace(String userId, List<BiometricsDto> sample,
++                                            UserBiometricRepository repo, IBioApiV2 sdk) {
++        if (userId == null || userId.trim().isEmpty() || sample == null || sample.isEmpty() || sdk == null) {
++            return false;
++        }
++        List<UserBiometric> mine = new ArrayList<>();
++        for (UserBiometric ub : repo.findAllOperatorBiometrics(BiometricType.FACE.toString())) {
++            if (userId.equals(ub.getUsrId())) {
++                mine.add(ub);
++            }
++        }
++        if (mine.isEmpty()) {
++            return false;
++        }
++        return matchBiometrics(BiometricType.FACE, mine, sample, sdk);
++    }
++
+     /**
+      * Converts the {@link UserBiometric} and {@link BiometricsDto} to {@link BiometricRecord} and
+      * {@link BiometricRecord array} respectively and calls the match method of Match-SDK library
 diff --git a/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
 new file mode 100644
-index 0000000..9432b66
+index 0000000..878a3b1
 --- /dev/null
 +++ b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,67 @@
 +package io.mosip.registration.clientmanager.util;
 +
 +import static org.junit.Assert.assertEquals;
@@ -151,9 +222,23 @@ index 0000000..9432b66
 +        }
 +        assertEquals("REG-LIV-001", AuditEvent.REG_LIVENESS_START.getId());
 +    }
++
++    @Test
++    public void test_password_login_unchanged_when_face_auth_disabled() {
++        // face authentication is OFF unless the server says exactly "true": the app then shows no face button and
++        // the login, packet authentication and approval calls behave as before
++        GlobalParamRepository repo = mock(GlobalParamRepository.class);
++        assertFalse(new LivenessSettings(repo).faceAuthEnabled());
++        when(repo.getCachedStringGlobalParam(LivenessSettings.FACE_AUTH_ENABLED)).thenReturn("yes");
++        assertFalse(new LivenessSettings(repo).faceAuthEnabled());
++        when(repo.getCachedStringGlobalParam(LivenessSettings.FACE_AUTH_ENABLED)).thenReturn("false");
++        assertFalse(new LivenessSettings(repo).faceAuthEnabled());
++        when(repo.getCachedStringGlobalParam(LivenessSettings.FACE_AUTH_ENABLED)).thenReturn("true");
++        assertTrue(new LivenessSettings(repo).faceAuthEnabled());
++    }
 +}
 diff --git a/assets/l10n/app_ar.arb b/assets/l10n/app_ar.arb
-index c3b216a..115bd5e 100644
+index c3b216a..72fe460 100644
 --- a/assets/l10n/app_ar.arb
 +++ b/assets/l10n/app_ar.arb
 @@ -317,11 +317,11 @@
@@ -203,7 +288,7 @@ index c3b216a..115bd5e 100644
    },
    "onboard_officer_biometric": "التحقق البيومتري للضابط (التسجيل)",
    "update_officer_biometric": "تحديث التحقق البيومتري للضابط",
-@@ -361,13 +361,82 @@
+@@ -361,13 +361,85 @@
    "search_for_key": "ابحث عن المفتاح",
    "no_devices_found": "لم يتم العثور على أجهزة",
    "connect_devices_and_scan": "يرجى توصيل أجهزتك والضغط على 'مسح' لاكتشافها",
@@ -286,11 +371,14 @@ index c3b216a..115bd5e 100644
 +  },
 +  "liveness_ui_title_resident": "التقاط وجه المقيم",
 +  "liveness_ui_title_operator": "مصادقة المشغّل",
-+  "liveness_ui_title_supervisor": "مصادقة المشرف"
++  "liveness_ui_title_supervisor": "مصادقة المشرف",
++  "liveness_login_with_face": "تسجيل الدخول بالوجه",
++  "liveness_auth_with_face": "المصادقة بالوجه",
++  "liveness_face_auth_hint": "لا توجد كلمة مرور؟ اتركها فارغة للمصادقة بوجهك (إذا كانت المصادقة بالوجه مفعّلة)."
  }
 -
 diff --git a/assets/l10n/app_en.arb b/assets/l10n/app_en.arb
-index 0012c53..893a19b 100644
+index 0012c53..3296392 100644
 --- a/assets/l10n/app_en.arb
 +++ b/assets/l10n/app_en.arb
 @@ -185,7 +185,7 @@
@@ -332,7 +420,7 @@ index 0012c53..893a19b 100644
    },
    "onboard_officer_biometric": "Officer's Biometric Onboarding",
    "update_officer_biometric": "Officer's Biometric Update",
-@@ -361,12 +361,82 @@
+@@ -361,12 +361,85 @@
    "search_for_key": "Search for Key",
    "no_devices_found": "No devices found",
    "connect_devices_and_scan": "Please connect your devices and tap 'Scan' to detect them",
@@ -415,10 +503,13 @@ index 0012c53..893a19b 100644
 +  },
 +  "liveness_ui_title_resident": "Resident face capture",
 +  "liveness_ui_title_operator": "Operator authentication",
-+  "liveness_ui_title_supervisor": "Supervisor authentication"
++  "liveness_ui_title_supervisor": "Supervisor authentication",
++  "liveness_login_with_face": "Login with face",
++  "liveness_auth_with_face": "Authenticate with face",
++  "liveness_face_auth_hint": "No password? Leave it empty to authenticate with your face (if face authentication is enabled)."
  }
 diff --git a/assets/l10n/app_fr.arb b/assets/l10n/app_fr.arb
-index 4935d25..bb3275a 100644
+index 4935d25..79bdb20 100644
 --- a/assets/l10n/app_fr.arb
 +++ b/assets/l10n/app_fr.arb
 @@ -317,11 +317,11 @@
@@ -468,7 +559,7 @@ index 4935d25..bb3275a 100644
    },
    "onboard_officer_biometric": "Enregistrement biométrique de l’officier",
    "update_officer_biometric": "Mise à jour biométrique de l’officier",
-@@ -361,13 +361,82 @@
+@@ -361,13 +361,85 @@
    "search_for_key": "Rechercher une clé",
    "no_devices_found": "Aucun appareil trouvé",
    "connect_devices_and_scan": "Veuillez connecter vos appareils et appuyer sur 'ANALYSE' pour les détecter",
@@ -551,11 +642,14 @@ index 4935d25..bb3275a 100644
 +  },
 +  "liveness_ui_title_resident": "Capture du visage du résident",
 +  "liveness_ui_title_operator": "Authentification de l'opérateur",
-+  "liveness_ui_title_supervisor": "Authentification du superviseur"
++  "liveness_ui_title_supervisor": "Authentification du superviseur",
++  "liveness_login_with_face": "Se connecter avec le visage",
++  "liveness_auth_with_face": "S'authentifier avec le visage",
++  "liveness_face_auth_hint": "Pas de mot de passe ? Laissez vide pour vous authentifier avec votre visage (si activé)."
  }
 -
 diff --git a/assets/l10n/app_hi.arb b/assets/l10n/app_hi.arb
-index fc09a47..a8feddb 100644
+index fc09a47..8ef600e 100644
 --- a/assets/l10n/app_hi.arb
 +++ b/assets/l10n/app_hi.arb
 @@ -316,13 +316,13 @@
@@ -608,7 +702,7 @@ index fc09a47..a8feddb 100644
    },
    "onboard_officer_biometric": "अधिकारी का बायोमेट्रिक ऑनबोर्डिंग",
    "update_officer_biometric": "अधिकारी का बायोमेट्रिक अपडेट",
-@@ -361,12 +361,82 @@
+@@ -361,12 +361,85 @@
    "search_for_key": "कुंजी खोजें",
    "no_devices_found": "कोई डिवाइस नहीं मिला",
    "connect_devices_and_scan": "कृपया अपने डिवाइस कनेक्ट करें और उन्हें खोजने के लिए 'स्कैन' पर टैप करें",
@@ -691,10 +785,13 @@ index fc09a47..a8feddb 100644
 +  },
 +  "liveness_ui_title_resident": "Resident face capture",
 +  "liveness_ui_title_operator": "Operator authentication",
-+  "liveness_ui_title_supervisor": "Supervisor authentication"
++  "liveness_ui_title_supervisor": "Supervisor authentication",
++  "liveness_login_with_face": "Login with face",
++  "liveness_auth_with_face": "Authenticate with face",
++  "liveness_face_auth_hint": "No password? Leave it empty to authenticate with your face (if face authentication is enabled)."
  }
 diff --git a/assets/l10n/app_kn.arb b/assets/l10n/app_kn.arb
-index 29bc909..92b5009 100644
+index 29bc909..1e35ed6 100644
 --- a/assets/l10n/app_kn.arb
 +++ b/assets/l10n/app_kn.arb
 @@ -131,7 +131,7 @@
@@ -767,7 +864,7 @@ index 29bc909..92b5009 100644
    },
    "onboard_officer_biometric": "ಅಧಿಕಾರಿಯ ಬಯೋಮೆಟ್ರಿಕ್ ನೋಂದಣಿ",
    "update_officer_biometric": "ಅಧಿಕಾರಿಯ ಬಯೋಮೆಟ್ರಿಕ್ ನವೀಕರಣ",
-@@ -361,12 +361,82 @@
+@@ -361,12 +361,85 @@
    "search_for_key": "ಕೀಗಾಗಿ ಹುಡುಕಿ",
    "no_devices_found": "ಯಾವುದೇ ಸಾಧನಗಳು ಕಂಡುಬಂದಿಲ್ಲ",
    "connect_devices_and_scan": "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಾಧನಗಳನ್ನು ಸಂಪರ್ಕಿಸಿ ಮತ್ತು ಅವುಗಳನ್ನು ಪತ್ತೆಹಚ್ಚಲು 'ಸ್ಕ್ಯಾನ್' ಅನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ",
@@ -850,10 +947,13 @@ index 29bc909..92b5009 100644
 +  },
 +  "liveness_ui_title_resident": "Resident face capture",
 +  "liveness_ui_title_operator": "Operator authentication",
-+  "liveness_ui_title_supervisor": "Supervisor authentication"
++  "liveness_ui_title_supervisor": "Supervisor authentication",
++  "liveness_login_with_face": "Login with face",
++  "liveness_auth_with_face": "Authenticate with face",
++  "liveness_face_auth_hint": "No password? Leave it empty to authenticate with your face (if face authentication is enabled)."
  }
 diff --git a/assets/l10n/app_ta.arb b/assets/l10n/app_ta.arb
-index 12ecdf7..4164262 100644
+index 12ecdf7..243e2e3 100644
 --- a/assets/l10n/app_ta.arb
 +++ b/assets/l10n/app_ta.arb
 @@ -70,7 +70,7 @@
@@ -928,7 +1028,7 @@ index 12ecdf7..4164262 100644
    },
    "onboard_officer_biometric": "அதிகாரியின் பயோமெட்ரிக் பதிவு",
    "update_officer_biometric": "அதிகாரியின் பயோமெட்ரிக் புதுப்பிப்பு",
-@@ -370,12 +361,82 @@
+@@ -370,12 +361,85 @@
    "search_for_key": "விசையைத் தேடவும்",
    "no_devices_found": "சாதனங்கள் எதுவும் கண்டுபிடிக்கப்படவில்லை",
    "connect_devices_and_scan": "தயவுசெய்து உங்கள் சாதனங்களை இணைத்து, அவற்றைக் கண்டறிய 'ஊடுகதிர்' என்பதைத் தட்டவும்",
@@ -1011,5 +1111,8 @@ index 12ecdf7..4164262 100644
 +  },
 +  "liveness_ui_title_resident": "Resident face capture",
 +  "liveness_ui_title_operator": "Operator authentication",
-+  "liveness_ui_title_supervisor": "Supervisor authentication"
++  "liveness_ui_title_supervisor": "Supervisor authentication",
++  "liveness_login_with_face": "Login with face",
++  "liveness_auth_with_face": "Authenticate with face",
++  "liveness_face_auth_hint": "No password? Leave it empty to authenticate with your face (if face authentication is enabled)."
  }
