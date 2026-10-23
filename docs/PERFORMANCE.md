@@ -6,31 +6,31 @@ Median milliseconds per stage for ONE processed frame, CPU execution provider, o
 
 | Stage | ms |
 |---|---|
-| decode | 10.9 |
-| face detector (YuNet) | 26.1 |
-| landmark mesh | 6.7 |
-| texture CNN (2 models) | 4.4 |
-| moire FFT (3 frames) | 127.8 |
-| flatness homography | 0.7 |
-| frame edge | 4.2 |
-| reflection | 0.8 |
-| embedding + alignment | 15.0 |
-| **total per processed frame** | **196.5** |
+| decode | 13.2 |
+| face detector (YuNet) | 32.7 |
+| landmark mesh | 9.0 |
+| texture CNN (2 models) | 7.9 |
+| moire FFT (3 frames) | 20.7 |
+| flatness homography | 0.8 |
+| frame edge | 4.9 |
+| reflection | 0.9 |
+| embedding + alignment | 17.4 |
+| **total per processed frame** | **107.5** |
 
 ## Android emulator (Android 13 arm64 on the same Mac; not a phone)
 
 | Stage | ms |
 |---|---|
-| decode | 2.6 |
-| face detector (YuNet) | 61.9 |
+| decode | 2.4 |
+| face detector (YuNet) | 61.8 |
 | landmark mesh | 14.1 |
-| texture CNN (2 models) | 6.8 |
-| moire FFT (3 frames) | 132.3 |
-| flatness homography | 2.3 |
+| texture CNN (2 models) | 7.2 |
+| moire FFT (3 frames) | 7.2 |
+| flatness homography | 2.2 |
 | frame edge | 21.3 |
 | reflection | 2.3 |
-| embedding + alignment | 21.8 |
-| **total per processed frame** | **265.3** |
+| embedding + alignment | 21.6 |
+| **total per processed frame** | **140.2** |
 
 ## Acceleration (decision D35: an accelerator is used only if its scores stay within a tolerance measured on DEV recordings)
 

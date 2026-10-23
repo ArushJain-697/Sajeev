@@ -67,24 +67,25 @@ public final class MoireMeasure {
         // A bin is an isolated peak when it is more than PEAK_RATIO times the median of its 9x9 neighbourhood.
         // A Hann-windowed sinusoid spreads into nearby bins, so a plain neighbour mean is not enough; the median is.
         double peaks = 0.0;
-        double[] window = new double[81];
         for (int y = 0; y < N; y++) {
             for (int x = 0; x < N; x++) {
                 double v = p[y * N + x];
                 if (v <= 0.0 || radius(x, y) < PEAK_MIN_RADIUS) {
                     continue;
                 }
-                int n = 0;
+                // v > PEAK_RATIO * median(window of 81)  <=>  at least 41 of the 81 values are below v / PEAK_RATIO.
+                // Counting is exact (same answer as sorting and taking the middle) and much cheaper.
+                double thr = v / PEAK_RATIO;
+                int below = 0;
                 for (int dy = -4; dy <= 4; dy++) {
+                    int row = ((y + dy + N) % N) * N;
                     for (int dx = -4; dx <= 4; dx++) {
-                        int yy = (y + dy + N) % N;
-                        int xx = (x + dx + N) % N;
-                        window[n++] = p[yy * N + xx];
+                        if (p[row + (x + dx + N) % N] < thr) {
+                            below++;
+                        }
                     }
                 }
-                java.util.Arrays.sort(window, 0, n);
-                double med = window[n / 2];
-                if (v > PEAK_RATIO * med) {
+                if (below >= 41) {
                     peaks += v;
                 }
             }
