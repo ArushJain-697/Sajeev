@@ -202,4 +202,56 @@ class LivenessEngineTest {
         assertEquals(ErrorState.DEVICE_UNAVAILABLE, s.verdict().error().get());
         assertEquals("stream_below_min_fps", s.verdict().reason());
     }
+
+    // ---- STAND-INS for attack species (synthetic edits of the public-domain photo, NOT recorded attacks) ----
+
+    private static byte[] jpegOf(java.awt.image.BufferedImage img) throws IOException {
+        java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "jpg", o);
+        return o.toByteArray();
+    }
+
+    private static java.awt.image.BufferedImage photo() throws IOException {
+        return javax.imageio.ImageIO.read(Paths.get("../testdata/fixtures-faces/one_face.jpg").toFile());
+    }
+
+    private String run(byte[] jpeg) throws Exception {
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+        feed(s, jpeg, 130); // long enough for the engine to give up with a guidance error if it never sees a usable face
+        assertNotNull(s.verdict());
+        String out = s.verdict().tier() + " " + votes(s);
+        assertTrue(s.verdict().tier() != Verdict.Tier.LIVE_PASSIVE && s.verdict().tier() != Verdict.Tier.LIVE_ACTIVE,
+                "stand-in attack accepted as live: " + out);
+        s.abort();
+        return out;
+    }
+
+    @Test
+    void test_attack_P2_screen_standin_moire_overlay_is_rejected_or_failure_is_reported() throws Exception {
+        java.awt.image.BufferedImage img = photo();
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int rgb = img.getRGB(x, y);
+                double add = 28 * Math.cos(2 * Math.PI * x / 4.0) + 28 * Math.cos(2 * Math.PI * y / 4.0); // pixel-grid beat of a screen
+                int r = (int) Math.max(0, Math.min(255, ((rgb >> 16) & 255) + add));
+                int g = (int) Math.max(0, Math.min(255, ((rgb >> 8) & 255) + add));
+                int b = (int) Math.max(0, Math.min(255, (rgb & 255) + add));
+                img.setRGB(x, y, (r << 16) | (g << 8) | b);
+            }
+        }
+        System.out.println("P2 stand-in: " + run(jpegOf(img)));
+    }
+
+    @Test
+    void test_attack_P1_held_print_standin_with_a_dark_border_is_rejected_or_failure_is_reported() throws Exception {
+        java.awt.image.BufferedImage src = photo();
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(src.getWidth() + 160, src.getHeight() + 160,
+                java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(new java.awt.Color(40, 40, 40));
+        g.fillRect(0, 0, img.getWidth(), img.getHeight());
+        g.drawImage(src, 80, 80, null); // the photo sits inside a dark frame, as a held-up print or phone does
+        g.dispose();
+        System.out.println("P1 border stand-in: " + run(jpegOf(img)));
+    }
 }
