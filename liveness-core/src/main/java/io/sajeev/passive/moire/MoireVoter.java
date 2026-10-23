@@ -18,6 +18,7 @@ import io.sajeev.image.ImageCodec;
 public final class MoireVoter implements PadVoter {
 
     private final YuNetDetector detector;
+    private final io.sajeev.face.FrameAnalysis analysis; // null: decode and detect here
     private final double shareLimit;
 
     /**
@@ -25,6 +26,12 @@ public final class MoireVoter implements PadVoter {
      * @param shareLimit peak-energy share at or above which a frame is flagged (TARGET 0.20)
      */
     public MoireVoter(YuNetDetector detector, double shareLimit) {
+        this(detector, shareLimit, null);
+    }
+
+    /** Same, sharing decoding and detection with the other voters through {@code analysis}. */
+    public MoireVoter(YuNetDetector detector, double shareLimit, io.sajeev.face.FrameAnalysis analysis) {
+        this.analysis = analysis;
         this.detector = detector;
         this.shareLimit = shareLimit;
     }
@@ -41,11 +48,11 @@ public final class MoireVoter implements PadVoter {
         int counted = 0;
         for (Frame f : window.subList(from, window.size())) {
             try {
-                PixelImage img = ImageCodec.decode(f.jpeg());
+                PixelImage img = analysis != null ? analysis.image(f) : ImageCodec.decode(f.jpeg());
                 if (img == null) {
                     continue;
                 }
-                List<Detection> faces = detector.detect(img, 0.6, 0.3);
+                List<Detection> faces = analysis != null ? analysis.faces(f) : detector.detect(img, 0.6, 0.3);
                 if (faces.size() != 1) {
                     continue;
                 }

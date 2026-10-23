@@ -23,6 +23,7 @@ public final class TextureCnnVoter implements PadVoter {
     private final MiniFasNetModel v2;
     private final MiniFasNetModel v1se;
     private final YuNetDetector detector;
+    private final io.sajeev.face.FrameAnalysis analysis; // null: decode and detect here
     private final double liveThreshold;
     private final double attackThreshold;
 
@@ -35,6 +36,13 @@ public final class TextureCnnVoter implements PadVoter {
      */
     public TextureCnnVoter(MiniFasNetModel v2, MiniFasNetModel v1se, YuNetDetector detector,
                            double liveThreshold, double attackThreshold) {
+        this(v2, v1se, detector, liveThreshold, attackThreshold, null);
+    }
+
+    /** Same, sharing decoding and detection with the other voters through {@code analysis}. */
+    public TextureCnnVoter(MiniFasNetModel v2, MiniFasNetModel v1se, YuNetDetector detector,
+                           double liveThreshold, double attackThreshold, io.sajeev.face.FrameAnalysis analysis) {
+        this.analysis = analysis;
         this.v2 = v2;
         this.v1se = v1se;
         this.detector = detector;
@@ -53,11 +61,11 @@ public final class TextureCnnVoter implements PadVoter {
             return new Vote(Vote.Label.ABSTAIN, 0.0, "empty_window");
         }
         try {
-            PixelImage img = ImageCodec.decode(window.get(window.size() - 1).jpeg());
+            PixelImage img = analysis != null ? analysis.image(window.get(window.size() - 1)) : ImageCodec.decode(window.get(window.size() - 1).jpeg());
             if (img == null) {
                 return new Vote(Vote.Label.ABSTAIN, 0.0, "undecodable_frame");
             }
-            List<Detection> faces = detector.detect(img, 0.6, 0.3);
+            List<Detection> faces = analysis != null ? analysis.faces(window.get(window.size() - 1)) : detector.detect(img, 0.6, 0.3);
             if (faces.size() != 1) {
                 return new Vote(Vote.Label.ABSTAIN, 0.0, "not_one_face");
             }

@@ -97,6 +97,7 @@ public final class EngineSession implements LivenessSession {
     private ChallengeSession challenge;
     private ActionDetectors.Baseline baseline;
     private ActionDetectors.Detector detector;
+    private final io.sajeev.face.FrameAnalysis analysis;
     private ChallengeType detectorFor;
     private ChallengeReevaluator reevaluator;
     private final ActionThresholds thresholds = ActionThresholds.defaults();
@@ -107,6 +108,7 @@ public final class EngineSession implements LivenessSession {
         this.workflow = workflow;
         this.policy = policy;
         this.st = engine.settings;
+        this.analysis = new io.sajeev.face.FrameAnalysis(engine.models.detector, 12);
         this.queue = new ArrayBlockingQueue<>(st.queueCapacity);
         this.guard = new FrameGuard(() -> currentArrivalNanos, Double.parseDouble(engine.config.value("minFps", name())),
                 "PERIODIC".equals(engine.config.value("frameProcessing", name())) ? ProcessingMode.PERIODIC : ProcessingMode.CONTINUOUS, 2);
@@ -286,6 +288,7 @@ public final class EngineSession implements LivenessSession {
         lastFace = null;
         reevaluator = null;
         detector = null;
+        analysis.clear();
     }
 
     private static PixelImage decode(byte[] jpeg) {
@@ -297,7 +300,7 @@ public final class EngineSession implements LivenessSession {
         if (firstArrivalNanos < 0) {
             firstArrivalNanos = f.arrivalNanos();
         }
-        PixelImage img = decode(f.jpeg());
+        PixelImage img = analysis.image(f);
         boolean take = guard.onArrival(img != null);
         if (guard.flags().contains(FrameFlag.INVALID_FRAME_DATA) && img == null) {
             lastTrackerError = ErrorState.INVALID_FRAME_DATA;
@@ -306,7 +309,7 @@ public final class EngineSession implements LivenessSession {
             checkPassiveTimeout(f);
             return;
         }
-        List<Detection> dets = engine.models.detector.detect(img, 0.6, 0.3);
+        List<Detection> dets = analysis.faces(f);
         Detection single = dets.size() == 1 ? dets.get(0) : null;
         FaceQuality.Metrics q = FaceQuality.measure(img, single);
         FaceTracker.State ts = tracker.assess(dets, q);
@@ -377,8 +380,8 @@ public final class EngineSession implements LivenessSession {
     private void runPassive(Frame f) {
         List<Frame> window = new ArrayList<>(usableFrames);
         TextureCnnVoter v1 = new TextureCnnVoter(engine.models.minifasV2, engine.models.minifasV1se, engine.models.detector,
-                st.textureLive, st.textureAttack);
-        MoireVoter v2 = new MoireVoter(engine.models.detector, st.moireShare);
+                st.textureLive, st.textureAttack, analysis);
+        MoireVoter v2 = new MoireVoter(engine.models.detector, st.moireShare, analysis);
         FlatnessVoter v3 = new FlatnessVoter(st.flatMinYaw, st.flatResidual, 200, 0.03, 42L);
         FrameEdgeVoter v4 = new FrameEdgeVoter(st.edgeMinShare, st.edgeMaxFaceShare, st.edgeMargin);
         ReflectionVoter v5 = new ReflectionVoter(0.02, 0.6, 0.15, 0.95);
@@ -504,11 +507,12 @@ public final class EngineSession implements LivenessSession {
             @Override
             public Vote vote(List<Frame> window) {
                 try {
-                    PixelImage img = decode(window.get(window.size() - 1).jpeg());
+                    Frame last = window.get(window.size() - 1);
+                    PixelImage img = analysis.image(last);
                     if (img == null) {
                         return new Vote(Vote.Label.ABSTAIN, 0.0, "undecodable_frame");
                     }
-                    List<Detection> faces = engine.models.detector.detect(img, 0.6, 0.3);
+                    List<Detection> faces = analysis.faces(last);
                     return faces.size() == 1 ? fn.apply(img, faces.get(0)) : new Vote(Vote.Label.ABSTAIN, 0.0, "not_one_face");
                 } catch (Exception e) {
                     return new Vote(Vote.Label.ABSTAIN, 0.0, "engine_error");
