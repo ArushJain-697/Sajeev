@@ -1,0 +1,1015 @@
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
+index 921e4d4..9c71b06 100644
+--- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
+@@ -191,7 +191,16 @@ public enum AuditEvent {
+     BIO_SDK_QUALITY_SCORE_FAILED("REG-EVT-094", SYSTEM_EVENT.getCode(), "BIO_SDK_QUALITY_SCORE_FAILED", "Unable to fetch SDK quality score"),
+     BIO_SDK_FILES_NOT_FOUND("REG-EVT-095", SYSTEM_EVENT.getCode(), "BIO_SDK_FILES_NOT_FOUND", "No biometric SDK files found in assets"),
+     BIO_SDK_PROVIDER_REGISTERED("REG-EVT-096", SYSTEM_EVENT.getCode(), "BIO_SDK_PROVIDER_REGISTERED", "Biometric SDK provider registered"),
+-    BIO_SDK_DEDUPE_MATCH("REG-EVT-097", SYSTEM_EVENT.getCode(), "BIO_SDK_DEDUPE_MATCH", "Biometric data matched with existing operator biometrics");
++    BIO_SDK_DEDUPE_MATCH("REG-EVT-097", SYSTEM_EVENT.getCode(), "BIO_SDK_DEDUPE_MATCH", "Biometric data matched with existing operator biometrics"),
++
++    // SAJEEV liveness (own ID block REG-LIV; no clash with REG-LOAD, REG-AUTH, REG-EVT and the other blocks)
++    REG_LIVENESS_START("REG-LIV-001", USER_EVENT.getCode(), "REG_LIVENESS_START", "Liveness check started"),
++    REG_LIVENESS_PASSIVE_RESULT("REG-LIV-002", USER_EVENT.getCode(), "REG_LIVENESS_PASSIVE_RESULT", "Passive liveness result"),
++    REG_LIVENESS_CHALLENGE_PROMPTED("REG-LIV-003", USER_EVENT.getCode(), "REG_LIVENESS_CHALLENGE_PROMPTED", "Active challenge prompted"),
++    REG_LIVENESS_CHALLENGE_RESULT("REG-LIV-004", USER_EVENT.getCode(), "REG_LIVENESS_CHALLENGE_RESULT", "Active challenge result"),
++    REG_LIVENESS_BINDING("REG-LIV-005", USER_EVENT.getCode(), "REG_LIVENESS_BINDING", "Captured face bound to the live face"),
++    REG_LIVENESS_VERDICT("REG-LIV-006", USER_EVENT.getCode(), "REG_LIVENESS_VERDICT", "Liveness verdict"),
++    REG_LIVENESS_ENGINE_UNAVAILABLE("REG-LIV-009", SYSTEM_EVENT.getCode(), "REG_LIVENESS_ENGINE_UNAVAILABLE", "Liveness engine unavailable");
+ 
+     AuditEvent(String id, String type, String name, String description) {
+         this.id = id;
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
+new file mode 100644
+index 0000000..5056639
+--- /dev/null
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
+@@ -0,0 +1,67 @@
++package io.mosip.registration.clientmanager.util;
++
++import io.mosip.registration.clientmanager.repository.GlobalParamRepository;
++
++/**
++ * SAJEEV liveness settings from the client's global parameters (synced from the server), each with a client-side default so
++ * the client works when the server sends nothing. A missing or invalid value never turns liveness off: only the exact
++ * value "false" does.
++ */
++public class LivenessSettings {
++
++    public static final String PREFIX = "mosip.registration.liveness.";
++    public static final String ENABLED = PREFIX + "enabled";
++    public static final String MAX_RETRIES = PREFIX + "maxRetries";
++    public static final String PASSIVE_THRESHOLD = PREFIX + "passive.threshold";
++    public static final String FACE_AUTH_ENABLED = PREFIX + "faceAuth.enabled";
++
++    public static final boolean DEFAULT_ENABLED = true;
++    public static final int DEFAULT_MAX_RETRIES = 3;
++    public static final double DEFAULT_PASSIVE_THRESHOLD = 0.80;
++    /** Face login and approval are new on Android and stay off until switched on, so the password path is unchanged. */
++    public static final boolean DEFAULT_FACE_AUTH_ENABLED = false;
++
++    private final GlobalParamRepository params;
++
++    public LivenessSettings(GlobalParamRepository params) {
++        this.params = params;
++    }
++
++    private String raw(String key) {
++        try {
++            return params == null ? null : params.getCachedStringGlobalParam(key);
++        } catch (RuntimeException e) {
++            return null;
++        }
++    }
++
++    public boolean enabled() {
++        String v = raw(ENABLED);
++        return v == null || !"false".equalsIgnoreCase(v.trim());
++    }
++
++    public boolean faceAuthEnabled() {
++        String v = raw(FACE_AUTH_ENABLED);
++        return v == null ? DEFAULT_FACE_AUTH_ENABLED : "true".equalsIgnoreCase(v.trim());
++    }
++
++    public int maxRetries() {
++        try {
++            String v = raw(MAX_RETRIES);
++            int n = v == null ? DEFAULT_MAX_RETRIES : Integer.parseInt(v.trim());
++            return n < 1 ? DEFAULT_MAX_RETRIES : n;
++        } catch (NumberFormatException e) {
++            return DEFAULT_MAX_RETRIES;
++        }
++    }
++
++    public double passiveThreshold() {
++        try {
++            String v = raw(PASSIVE_THRESHOLD);
++            double d = v == null ? DEFAULT_PASSIVE_THRESHOLD : Double.parseDouble(v.trim());
++            return d <= 0 || d > 1 ? DEFAULT_PASSIVE_THRESHOLD : d;
++        } catch (NumberFormatException e) {
++            return DEFAULT_PASSIVE_THRESHOLD;
++        }
++    }
++}
+diff --git a/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
+new file mode 100644
+index 0000000..9432b66
+--- /dev/null
++++ b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
+@@ -0,0 +1,53 @@
++package io.mosip.registration.clientmanager.util;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.when;
++
++import java.util.HashSet;
++import java.util.Set;
++import org.junit.Test;
++
++import io.mosip.registration.clientmanager.constant.AuditEvent;
++import io.mosip.registration.clientmanager.repository.GlobalParamRepository;
++
++public class LivenessSettingsTest {
++
++    @Test
++    public void test_android_defaults_apply_when_server_values_absent() {
++        GlobalParamRepository repo = mock(GlobalParamRepository.class); // every key answers null: the server sent nothing
++        LivenessSettings s = new LivenessSettings(repo);
++        assertTrue(s.enabled());
++        assertEquals(3, s.maxRetries());
++        assertEquals(0.80, s.passiveThreshold(), 0.0);
++        assertFalse("face auth is new and stays off until switched on", s.faceAuthEnabled());
++        assertTrue(new LivenessSettings(null).enabled());
++    }
++
++    @Test
++    public void test_bad_values_fall_back_and_never_switch_liveness_off() {
++        GlobalParamRepository repo = mock(GlobalParamRepository.class);
++        when(repo.getCachedStringGlobalParam(LivenessSettings.ENABLED)).thenReturn("maybe");
++        when(repo.getCachedStringGlobalParam(LivenessSettings.MAX_RETRIES)).thenReturn("zero");
++        when(repo.getCachedStringGlobalParam(LivenessSettings.PASSIVE_THRESHOLD)).thenReturn("7");
++        LivenessSettings s = new LivenessSettings(repo);
++        assertTrue(s.enabled());
++        assertEquals(3, s.maxRetries());
++        assertEquals(0.80, s.passiveThreshold(), 0.0);
++        when(repo.getCachedStringGlobalParam(LivenessSettings.ENABLED)).thenReturn("false");
++        when(repo.getCachedStringGlobalParam(LivenessSettings.MAX_RETRIES)).thenReturn("5");
++        assertFalse(s.enabled());
++        assertEquals(5, s.maxRetries());
++    }
++
++    @Test
++    public void test_android_audit_ids_unique() {
++        Set<String> ids = new HashSet<>();
++        for (AuditEvent e : AuditEvent.values()) {
++            assertTrue("duplicate audit id " + e.getId(), ids.add(e.getId()));
++        }
++        assertEquals("REG-LIV-001", AuditEvent.REG_LIVENESS_START.getId());
++    }
++}
+diff --git a/assets/l10n/app_ar.arb b/assets/l10n/app_ar.arb
+index c3b216a..115bd5e 100644
+--- a/assets/l10n/app_ar.arb
++++ b/assets/l10n/app_ar.arb
+@@ -317,11 +317,11 @@
+   "enter_application_id": "الرجاء إدخال معرف التطبيق",
+   "prid_length_greater": "يجب أن يتكون معرف التطبيق من أرقام {length} بالضبط",
+   "@prid_length_greater": {
+-     "placeholders": {
+-        "length": {
+-          "type": "int"
+-        }
+-     }
++    "placeholders": {
++      "length": {
++        "type": "int"
++      }
++    }
+   },
+   "okay": "تمام",
+   "no_internet_connection": "لا يوجد اتصال بالإنترنت!",
+@@ -340,19 +340,19 @@
+   "scheduled_job_settings": "إعدادات المهمة المجدولة",
+   "doc_size_exceeded": "حجم الملف يتجاوز الحد {size}",
+   "@doc_size_exceeded": {
+-       "placeholders": {
+-         "size": {
+-           "type": "String"
+-         }
+-       }
++    "placeholders": {
++      "size": {
++        "type": "String"
++      }
++    }
+   },
+   "age_should_not_be_greater": "يجب ألا يزيد العمر عن {age} سنة",
+   "@age_should_not_be_greater": {
+-       "placeholders": {
+-            "age": {
+-            "type": "int"
+-            }
+-       }
++    "placeholders": {
++      "age": {
++        "type": "int"
++      }
++    }
+   },
+   "onboard_officer_biometric": "التحقق البيومتري للضابط (التسجيل)",
+   "update_officer_biometric": "تحديث التحقق البيومتري للضابط",
+@@ -361,13 +361,82 @@
+   "search_for_key": "ابحث عن المفتاح",
+   "no_devices_found": "لم يتم العثور على أجهزة",
+   "connect_devices_and_scan": "يرجى توصيل أجهزتك والضغط على 'مسح' لاكتشافها",
+-  "search_for_key": "ابحث عن المفتاح",
+   "sync_restart_dialog_message": "سيتم إعادة تشغيل التطبيق بمجرد النقر على إعادة التشغيل، وسيتم توجيهك إلى صفحة تسجيل الدخول.",
+   "sync_restart_button": "إعادة التشغيل",
+   "app_restart_message": "تم حفظ التكوين بنجاح. جارٍ إعادة تشغيل التطبيق...",
+   "select_option": "اختر خياراً",
+   "cron_expression": "تعبير كرون",
+   "id": "بطاقة تعريف",
+-  "name": "اسم"
++  "name": "اسم",
++  "liveness_passive_checking": "جارٍ التحقق من حيوية الوجه…",
++  "liveness_challenge_blink": "يرجى رمش عينيك",
++  "liveness_challenge_smile": "يرجى الابتسام",
++  "liveness_challenge_turn_left": "يرجى تحريك رأسك نحو اليسار",
++  "liveness_challenge_turn_right": "يرجى تحريك رأسك نحو اليمين",
++  "liveness_challenge_look_left": "يرجى النظر إلى اليسار",
++  "liveness_challenge_look_right": "يرجى النظر إلى اليمين",
++  "liveness_challenge_look_up": "يرجى النظر إلى الأعلى",
++  "liveness_challenge_look_down": "يرجى النظر إلى الأسفل",
++  "liveness_challenge_eyes_closed_hold": "يرجى إغلاق عينيك والاستمرار",
++  "liveness_challenge_open_mouth": "يرجى فتح فمك",
++  "liveness_feedback_continue": "يرجى المتابعة",
++  "liveness_feedback_action_detected": "تم رصد الحركة",
++  "liveness_feedback_hold_still": "ابقَ ثابتاً",
++  "liveness_feedback_captured": "جيد، تم التقاط الوجه بنجاح",
++  "liveness_failure_liveness": "لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.",
++  "liveness_failure_pad": "تعذّر إكمال التحقق من الوجه. يرجى المحاولة مرة أخرى.",
++  "liveness_failure_max_retries": "تعذّر إكمال التحقق من الوجه أو التقاطه. يرجى اتباع إجراء الاسترداد.",
++  "liveness_hint_look_camera": "انظر مباشرة إلى الكاميرا.",
++  "liveness_hint_face_visible": "تأكد من أن وجهك مرئي بوضوح.",
++  "liveness_hint_lighting": "حسّن الإضاءة.",
++  "liveness_hint_capture_area": "أبقِ وجهك داخل منطقة الالتقاط.",
++  "liveness_hint_follow_prompt": "اتبع الحركة المطلوبة.",
++  "liveness_error_device_unavailable": "لم يتم العثور على جهاز كاميرا",
++  "liveness_error_device_disconnected": "انقطع الاتصال بالجهاز. يرجى إعادة التوصيل.",
++  "liveness_error_camera_unavailable": "الكاميرا غير متاحة",
++  "liveness_error_face_not_detected": "أبقِ وجهك داخل منطقة الالتقاط",
++  "liveness_error_multiple_faces": "يجب أن يكون شخص واحد فقط في الإطار",
++  "liveness_error_poor_quality_small": "اقترب من الكاميرا",
++  "liveness_error_poor_quality_dark": "حسّن الإضاءة",
++  "liveness_error_poor_quality_blurry": "ابقَ ثابتاً وركّز الكاميرا",
++  "liveness_error_invalid_frame": "خطأ في الجهاز. يرجى المحاولة مرة أخرى.",
++  "liveness_error_active_required": "لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.",
++  "liveness_error_challenge_failed": "لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى. اتبع الحركة المطلوبة.",
++  "liveness_error_challenge_timeout": "لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى. استجب خلال الوقت المحدد.",
++  "liveness_error_engine": "التحقق من الوجه غير متاح",
++  "liveness_spoken_challenge_blink": "يرجى رمش عينيك",
++  "liveness_spoken_challenge_smile": "يرجى الابتسام",
++  "liveness_spoken_challenge_turn_left": "يرجى تحريك رأسك نحو اليسار",
++  "liveness_spoken_challenge_turn_right": "يرجى تحريك رأسك نحو اليمين",
++  "liveness_spoken_challenge_look_left": "يرجى النظر إلى اليسار",
++  "liveness_spoken_challenge_look_right": "يرجى النظر إلى اليمين",
++  "liveness_spoken_challenge_look_up": "يرجى النظر إلى الأعلى",
++  "liveness_spoken_challenge_look_down": "يرجى النظر إلى الأسفل",
++  "liveness_spoken_challenge_eyes_closed_hold": "يرجى إغلاق عينيك والاستمرار",
++  "liveness_spoken_challenge_open_mouth": "يرجى فتح فمك",
++  "liveness_ui_badge_checking": "جارٍ التحقق",
++  "liveness_ui_badge_challenge": "تحدٍّ",
++  "liveness_ui_badge_not_verified": "لم يتم التحقق",
++  "liveness_ui_badge_stopped": "متوقف",
++  "liveness_ui_badge_retry": "يمكن إعادة المحاولة",
++  "liveness_ui_badge_device_error": "خطأ في الجهاز",
++  "liveness_ui_badge_verified": "تم التحقق",
++  "liveness_ui_try_again": "حاول مرة أخرى",
++  "liveness_ui_rescan": "إعادة البحث عن الأجهزة",
++  "liveness_ui_offline": "غير متصل: يتم استخدام آخر إعدادات تمت مزامنتها",
++  "liveness_ui_online": "متصل",
++  "liveness_ui_attempt": "المحاولة {current} من {max}",
++  "@liveness_ui_attempt": {
++    "placeholders": {
++      "current": {
++        "type": "int"
++      },
++      "max": {
++        "type": "int"
++      }
++    }
++  },
++  "liveness_ui_title_resident": "التقاط وجه المقيم",
++  "liveness_ui_title_operator": "مصادقة المشغّل",
++  "liveness_ui_title_supervisor": "مصادقة المشرف"
+ }
+-
+diff --git a/assets/l10n/app_en.arb b/assets/l10n/app_en.arb
+index 0012c53..893a19b 100644
+--- a/assets/l10n/app_en.arb
++++ b/assets/l10n/app_en.arb
+@@ -185,7 +185,7 @@
+   "system_storage_usage": "System Storage Usage",
+   "download_pre_registration_data": "Download Pre-Registration Data",
+   "update_operator_biomterics": "Update Operator Biometrics",
+-  "onboard_operator_biomterics":"Onboard Operator Biometrics",
++  "onboard_operator_biomterics": "Onboard Operator Biometrics",
+   "appliction_upload": "Application Upload",
+   "check_updates": "Check Updates",
+   "center_remap_sync": "Center Remap Sync.",
+@@ -340,19 +340,19 @@
+   "no_access_to_this_page": "You don't have access to this page",
+   "doc_size_exceeded": "File size exceeds limit {size}",
+   "@doc_size_exceeded": {
+-     "placeholders": {
+-       "size": {
+-         "type": "String"
+-       }
+-     }
++    "placeholders": {
++      "size": {
++        "type": "String"
++      }
++    }
+   },
+   "age_should_not_be_greater": "Age should not be greater than {age} years",
+   "@age_should_not_be_greater": {
+-     "placeholders": {
+-          "age": {
+-          "type": "int"
+-          }
+-     }
++    "placeholders": {
++      "age": {
++        "type": "int"
++      }
++    }
+   },
+   "onboard_officer_biometric": "Officer's Biometric Onboarding",
+   "update_officer_biometric": "Officer's Biometric Update",
+@@ -361,12 +361,82 @@
+   "search_for_key": "Search for Key",
+   "no_devices_found": "No devices found",
+   "connect_devices_and_scan": "Please connect your devices and tap 'Scan' to detect them",
+-  "search_for_key": "Search for Key",
+   "sync_restart_dialog_message": "The app will restart once you click Restart, and you will be redirected to the login page.",
+   "sync_restart_button": "Restart",
+   "app_restart_message": "Configuration saved successfully. Restarting app...",
+   "select_option": "Select Option",
+   "cron_expression": "Cron Expression",
+   "id": "ID",
+-  "name": "Name"
++  "name": "Name",
++  "liveness_passive_checking": "Checking face liveness…",
++  "liveness_challenge_blink": "Please blink",
++  "liveness_challenge_smile": "Please smile",
++  "liveness_challenge_turn_left": "Please turn your head to the left",
++  "liveness_challenge_turn_right": "Please turn your head to the right",
++  "liveness_challenge_look_left": "Please look to the left",
++  "liveness_challenge_look_right": "Please look to the right",
++  "liveness_challenge_look_up": "Please look up",
++  "liveness_challenge_look_down": "Please look down",
++  "liveness_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_challenge_open_mouth": "Please open your mouth",
++  "liveness_feedback_continue": "Please continue",
++  "liveness_feedback_action_detected": "Action detected",
++  "liveness_feedback_hold_still": "Hold still",
++  "liveness_feedback_captured": "Good, face captured successfully",
++  "liveness_failure_liveness": "We could not verify face liveness. Please try again.",
++  "liveness_failure_pad": "Face verification could not be completed. Please try again.",
++  "liveness_failure_max_retries": "Face verification could not be completed. Please follow the recovery process.",
++  "liveness_hint_look_camera": "Look directly at the camera.",
++  "liveness_hint_face_visible": "Ensure your face is clearly visible.",
++  "liveness_hint_lighting": "Improve lighting.",
++  "liveness_hint_capture_area": "Keep your face within the capture area.",
++  "liveness_hint_follow_prompt": "Follow the prompted action.",
++  "liveness_error_device_unavailable": "No camera device found",
++  "liveness_error_device_disconnected": "Device connection lost. Please reconnect.",
++  "liveness_error_camera_unavailable": "Camera not available",
++  "liveness_error_face_not_detected": "Keep your face within the capture area",
++  "liveness_error_multiple_faces": "Only one person should be in view",
++  "liveness_error_poor_quality_small": "Move closer to the camera",
++  "liveness_error_poor_quality_dark": "Improve lighting",
++  "liveness_error_poor_quality_blurry": "Hold still and keep the camera in focus",
++  "liveness_error_invalid_frame": "Device error. Please try again.",
++  "liveness_error_active_required": "We could not verify face liveness. Please try again.",
++  "liveness_error_challenge_failed": "We could not verify face liveness. Please try again. Follow the prompted action.",
++  "liveness_error_challenge_timeout": "We could not verify face liveness. Please try again. Respond within the time shown.",
++  "liveness_error_engine": "Face verification unavailable",
++  "liveness_spoken_challenge_blink": "Please blink",
++  "liveness_spoken_challenge_smile": "Please smile",
++  "liveness_spoken_challenge_turn_left": "Please turn your head to the left",
++  "liveness_spoken_challenge_turn_right": "Please turn your head to the right",
++  "liveness_spoken_challenge_look_left": "Please look to the left",
++  "liveness_spoken_challenge_look_right": "Please look to the right",
++  "liveness_spoken_challenge_look_up": "Please look up",
++  "liveness_spoken_challenge_look_down": "Please look down",
++  "liveness_spoken_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_spoken_challenge_open_mouth": "Please open your mouth",
++  "liveness_ui_badge_checking": "Checking",
++  "liveness_ui_badge_challenge": "Challenge",
++  "liveness_ui_badge_not_verified": "Not verified",
++  "liveness_ui_badge_stopped": "Stopped",
++  "liveness_ui_badge_retry": "Retry available",
++  "liveness_ui_badge_device_error": "Device error",
++  "liveness_ui_badge_verified": "Verified",
++  "liveness_ui_try_again": "Try again",
++  "liveness_ui_rescan": "Re-scan devices",
++  "liveness_ui_offline": "Offline: last synced configuration in use",
++  "liveness_ui_online": "Online",
++  "liveness_ui_attempt": "Attempt {current} of {max}",
++  "@liveness_ui_attempt": {
++    "placeholders": {
++      "current": {
++        "type": "int"
++      },
++      "max": {
++        "type": "int"
++      }
++    }
++  },
++  "liveness_ui_title_resident": "Resident face capture",
++  "liveness_ui_title_operator": "Operator authentication",
++  "liveness_ui_title_supervisor": "Supervisor authentication"
+ }
+diff --git a/assets/l10n/app_fr.arb b/assets/l10n/app_fr.arb
+index 4935d25..bb3275a 100644
+--- a/assets/l10n/app_fr.arb
++++ b/assets/l10n/app_fr.arb
+@@ -317,11 +317,11 @@
+   "enter_application_id": "Veuillez saisir l'ID de la demande",
+   "prid_length_greater": "L'ID de l'application doit contenir exactement {length} chiffres",
+   "@prid_length_greater": {
+-     "placeholders": {
+-        "length": {
+-          "type": "int"
+-        }
+-     }
++    "placeholders": {
++      "length": {
++        "type": "int"
++      }
++    }
+   },
+   "okay": "D'ACCORD",
+   "no_internet_connection": "Pas de connexion Internet!",
+@@ -340,19 +340,19 @@
+   "scheduled_job_settings": "Paramètres des tâches planifiées",
+   "doc_size_exceeded": "La taille du fichier dépasse la limite de {size}",
+   "@doc_size_exceeded": {
+-       "placeholders": {
+-         "size": {
+-           "type": "String"
+-         }
+-       }
++    "placeholders": {
++      "size": {
++        "type": "String"
++      }
++    }
+   },
+   "age_should_not_be_greater": "L'âge ne doit pas dépasser {age} ans.",
+   "@age_should_not_be_greater": {
+-       "placeholders": {
+-            "age": {
+-            "type": "int"
+-            }
+-       }
++    "placeholders": {
++      "age": {
++        "type": "int"
++      }
++    }
+   },
+   "onboard_officer_biometric": "Enregistrement biométrique de l’officier",
+   "update_officer_biometric": "Mise à jour biométrique de l’officier",
+@@ -361,13 +361,82 @@
+   "search_for_key": "Rechercher une clé",
+   "no_devices_found": "Aucun appareil trouvé",
+   "connect_devices_and_scan": "Veuillez connecter vos appareils et appuyer sur 'ANALYSE' pour les détecter",
+-  "search_for_key": "Rechercher une clé",
+   "sync_restart_dialog_message": "L'application redémarrera une fois que vous aurez cliqué sur Redémarrer, et vous serez redirigé vers la page de connexion.",
+   "sync_restart_button": "Redémarrer",
+   "app_restart_message": "Configuration enregistrée avec succès. Redémarrage de l'application...",
+   "select_option": "Sélectionner une option",
+   "cron_expression": "Expression Cron",
+   "id": "IDENTIFIANT",
+-  "name": "Nom"
++  "name": "Nom",
++  "liveness_passive_checking": "Vérification de la vivacité du visage…",
++  "liveness_challenge_blink": "Veuillez cligner des yeux",
++  "liveness_challenge_smile": "Veuillez sourire",
++  "liveness_challenge_turn_left": "Veuillez tourner la tête vers la gauche",
++  "liveness_challenge_turn_right": "Veuillez tourner la tête vers la droite",
++  "liveness_challenge_look_left": "Veuillez regarder à gauche",
++  "liveness_challenge_look_right": "Veuillez regarder à droite",
++  "liveness_challenge_look_up": "Veuillez regarder vers le haut",
++  "liveness_challenge_look_down": "Veuillez regarder vers le bas",
++  "liveness_challenge_eyes_closed_hold": "Veuillez fermer les yeux et les garder fermés",
++  "liveness_challenge_open_mouth": "Veuillez ouvrir la bouche",
++  "liveness_feedback_continue": "Veuillez continuer",
++  "liveness_feedback_action_detected": "Action détectée",
++  "liveness_feedback_hold_still": "Restez immobile",
++  "liveness_feedback_captured": "Bien, visage capturé avec succès",
++  "liveness_failure_liveness": "Nous n'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.",
++  "liveness_failure_pad": "La vérification du visage n'a pas pu être effectuée. Veuillez réessayer.",
++  "liveness_failure_max_retries": "La vérification du visage n'a pas pu être effectuée. Veuillez suivre la procédure de récupération.",
++  "liveness_hint_look_camera": "Regardez directement la caméra.",
++  "liveness_hint_face_visible": "Assurez-vous que votre visage est bien visible.",
++  "liveness_hint_lighting": "Améliorez l'éclairage.",
++  "liveness_hint_capture_area": "Gardez votre visage dans la zone de capture.",
++  "liveness_hint_follow_prompt": "Suivez l'action demandée.",
++  "liveness_error_device_unavailable": "Aucun appareil photo trouvé",
++  "liveness_error_device_disconnected": "Connexion à l'appareil perdue. Veuillez le reconnecter.",
++  "liveness_error_camera_unavailable": "Caméra non disponible",
++  "liveness_error_face_not_detected": "Gardez votre visage dans la zone de capture",
++  "liveness_error_multiple_faces": "Une seule personne doit être dans le champ",
++  "liveness_error_poor_quality_small": "Approchez-vous de la caméra",
++  "liveness_error_poor_quality_dark": "Améliorez l'éclairage",
++  "liveness_error_poor_quality_blurry": "Restez immobile et faites la mise au point",
++  "liveness_error_invalid_frame": "Erreur de l'appareil. Veuillez réessayer.",
++  "liveness_error_active_required": "Nous n'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.",
++  "liveness_error_challenge_failed": "Nous n'avons pas pu vérifier la vivacité du visage. Veuillez réessayer. Suivez l'action demandée.",
++  "liveness_error_challenge_timeout": "Nous n'avons pas pu vérifier la vivacité du visage. Veuillez réessayer. Répondez dans le délai indiqué.",
++  "liveness_error_engine": "Vérification du visage indisponible",
++  "liveness_spoken_challenge_blink": "Veuillez cligner des yeux",
++  "liveness_spoken_challenge_smile": "Veuillez sourire",
++  "liveness_spoken_challenge_turn_left": "Veuillez tourner la tête vers la gauche",
++  "liveness_spoken_challenge_turn_right": "Veuillez tourner la tête vers la droite",
++  "liveness_spoken_challenge_look_left": "Veuillez regarder à gauche",
++  "liveness_spoken_challenge_look_right": "Veuillez regarder à droite",
++  "liveness_spoken_challenge_look_up": "Veuillez regarder vers le haut",
++  "liveness_spoken_challenge_look_down": "Veuillez regarder vers le bas",
++  "liveness_spoken_challenge_eyes_closed_hold": "Veuillez fermer les yeux et les garder fermés",
++  "liveness_spoken_challenge_open_mouth": "Veuillez ouvrir la bouche",
++  "liveness_ui_badge_checking": "Vérification",
++  "liveness_ui_badge_challenge": "Défi",
++  "liveness_ui_badge_not_verified": "Non vérifié",
++  "liveness_ui_badge_stopped": "Arrêté",
++  "liveness_ui_badge_retry": "Nouvel essai possible",
++  "liveness_ui_badge_device_error": "Erreur de l'appareil",
++  "liveness_ui_badge_verified": "Vérifié",
++  "liveness_ui_try_again": "Réessayer",
++  "liveness_ui_rescan": "Rechercher à nouveau les appareils",
++  "liveness_ui_offline": "Hors ligne : dernière configuration synchronisée utilisée",
++  "liveness_ui_online": "En ligne",
++  "liveness_ui_attempt": "Essai {current} sur {max}",
++  "@liveness_ui_attempt": {
++    "placeholders": {
++      "current": {
++        "type": "int"
++      },
++      "max": {
++        "type": "int"
++      }
++    }
++  },
++  "liveness_ui_title_resident": "Capture du visage du résident",
++  "liveness_ui_title_operator": "Authentification de l'opérateur",
++  "liveness_ui_title_supervisor": "Authentification du superviseur"
+ }
+-
+diff --git a/assets/l10n/app_hi.arb b/assets/l10n/app_hi.arb
+index fc09a47..a8feddb 100644
+--- a/assets/l10n/app_hi.arb
++++ b/assets/l10n/app_hi.arb
+@@ -316,13 +316,13 @@
+   "correct_application_id": "कृपया दर्ज की गई एप्लिकेशन आईडी की जांच करें या सही आईडी दर्ज करें और इसे दोबारा लाने का प्रयास करें।",
+   "enter_application_id": "कृपया आवेदन आईडी दर्ज करें",
+   "prid_length_greater": "एप्लिकेशन आईडी बिल्कुल {length} अंकों की होनी चाहिए।",
+-    "@prid_length_greater": {
+-      "placeholders": {
+-        "length": {
+-          "type": "int"
+-        }
++  "@prid_length_greater": {
++    "placeholders": {
++      "length": {
++        "type": "int"
++      }
+     }
+-   },
++  },
+   "okay": "ठीक है",
+   "no_internet_connection": "कोई इंटरनेट कनेक्शन नहीं!",
+   "connect_and_retry": "कृपया इंटरनेट से जुड़ें और पुनः प्रयास करें।",
+@@ -340,19 +340,19 @@
+   "scheduled_job_settings": "अनुसूचित कार्य सेटिंग्स",
+   "doc_size_exceeded": "फ़ाइल का आकार सीमा {size} से अधिक है",
+   "@doc_size_exceeded": {
+-       "placeholders": {
+-         "size": {
+-           "type": "String"
+-         }
+-       }
++    "placeholders": {
++      "size": {
++        "type": "String"
++      }
++    }
+   },
+   "age_should_not_be_greater": "उम्र {age} वर्ष से अधिक नहीं होनी चाहिए।",
+   "@age_should_not_be_greater": {
+-       "placeholders": {
+-            "age": {
+-            "type": "int"
+-            }
+-       }
++    "placeholders": {
++      "age": {
++        "type": "int"
++      }
++    }
+   },
+   "onboard_officer_biometric": "अधिकारी का बायोमेट्रिक ऑनबोर्डिंग",
+   "update_officer_biometric": "अधिकारी का बायोमेट्रिक अपडेट",
+@@ -361,12 +361,82 @@
+   "search_for_key": "कुंजी खोजें",
+   "no_devices_found": "कोई डिवाइस नहीं मिला",
+   "connect_devices_and_scan": "कृपया अपने डिवाइस कनेक्ट करें और उन्हें खोजने के लिए 'स्कैन' पर टैप करें",
+-  "search_for_key": "कुंजी खोजें",
+   "sync_restart_dialog_message": "जैसे ही आप पुनः आरंभ करें पर क्लिक करेंगे ऐप पुनः आरंभ हो जाएगा, और आपको लॉगिन पृष्ठ पर पुनः निर्देशित किया जाएगा।",
+   "sync_restart_button": "पुनः आरंभ करें",
+   "app_restart_message": "कॉन्फ़िगरेशन सफलतापूर्वक सहेजा गया. ऐप पुनः प्रारंभ हो रहा है...",
+   "select_option": "विकल्प चुनें",
+   "cron_expression": "क्रोन एक्सप्रेशन",
+   "id": "आईडी",
+-  "name": "नाम"
++  "name": "नाम",
++  "liveness_passive_checking": "Checking face liveness…",
++  "liveness_challenge_blink": "Please blink",
++  "liveness_challenge_smile": "Please smile",
++  "liveness_challenge_turn_left": "Please turn your head to the left",
++  "liveness_challenge_turn_right": "Please turn your head to the right",
++  "liveness_challenge_look_left": "Please look to the left",
++  "liveness_challenge_look_right": "Please look to the right",
++  "liveness_challenge_look_up": "Please look up",
++  "liveness_challenge_look_down": "Please look down",
++  "liveness_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_challenge_open_mouth": "Please open your mouth",
++  "liveness_feedback_continue": "Please continue",
++  "liveness_feedback_action_detected": "Action detected",
++  "liveness_feedback_hold_still": "Hold still",
++  "liveness_feedback_captured": "Good, face captured successfully",
++  "liveness_failure_liveness": "We could not verify face liveness. Please try again.",
++  "liveness_failure_pad": "Face verification could not be completed. Please try again.",
++  "liveness_failure_max_retries": "Face verification could not be completed. Please follow the recovery process.",
++  "liveness_hint_look_camera": "Look directly at the camera.",
++  "liveness_hint_face_visible": "Ensure your face is clearly visible.",
++  "liveness_hint_lighting": "Improve lighting.",
++  "liveness_hint_capture_area": "Keep your face within the capture area.",
++  "liveness_hint_follow_prompt": "Follow the prompted action.",
++  "liveness_error_device_unavailable": "No camera device found",
++  "liveness_error_device_disconnected": "Device connection lost. Please reconnect.",
++  "liveness_error_camera_unavailable": "Camera not available",
++  "liveness_error_face_not_detected": "Keep your face within the capture area",
++  "liveness_error_multiple_faces": "Only one person should be in view",
++  "liveness_error_poor_quality_small": "Move closer to the camera",
++  "liveness_error_poor_quality_dark": "Improve lighting",
++  "liveness_error_poor_quality_blurry": "Hold still and keep the camera in focus",
++  "liveness_error_invalid_frame": "Device error. Please try again.",
++  "liveness_error_active_required": "We could not verify face liveness. Please try again.",
++  "liveness_error_challenge_failed": "We could not verify face liveness. Please try again. Follow the prompted action.",
++  "liveness_error_challenge_timeout": "We could not verify face liveness. Please try again. Respond within the time shown.",
++  "liveness_error_engine": "Face verification unavailable",
++  "liveness_spoken_challenge_blink": "Please blink",
++  "liveness_spoken_challenge_smile": "Please smile",
++  "liveness_spoken_challenge_turn_left": "Please turn your head to the left",
++  "liveness_spoken_challenge_turn_right": "Please turn your head to the right",
++  "liveness_spoken_challenge_look_left": "Please look to the left",
++  "liveness_spoken_challenge_look_right": "Please look to the right",
++  "liveness_spoken_challenge_look_up": "Please look up",
++  "liveness_spoken_challenge_look_down": "Please look down",
++  "liveness_spoken_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_spoken_challenge_open_mouth": "Please open your mouth",
++  "liveness_ui_badge_checking": "Checking",
++  "liveness_ui_badge_challenge": "Challenge",
++  "liveness_ui_badge_not_verified": "Not verified",
++  "liveness_ui_badge_stopped": "Stopped",
++  "liveness_ui_badge_retry": "Retry available",
++  "liveness_ui_badge_device_error": "Device error",
++  "liveness_ui_badge_verified": "Verified",
++  "liveness_ui_try_again": "Try again",
++  "liveness_ui_rescan": "Re-scan devices",
++  "liveness_ui_offline": "Offline: last synced configuration in use",
++  "liveness_ui_online": "Online",
++  "liveness_ui_attempt": "Attempt {current} of {max}",
++  "@liveness_ui_attempt": {
++    "placeholders": {
++      "current": {
++        "type": "int"
++      },
++      "max": {
++        "type": "int"
++      }
++    }
++  },
++  "liveness_ui_title_resident": "Resident face capture",
++  "liveness_ui_title_operator": "Operator authentication",
++  "liveness_ui_title_supervisor": "Supervisor authentication"
+ }
+diff --git a/assets/l10n/app_kn.arb b/assets/l10n/app_kn.arb
+index 29bc909..92b5009 100644
+--- a/assets/l10n/app_kn.arb
++++ b/assets/l10n/app_kn.arb
+@@ -131,7 +131,7 @@
+   "reference_number": "ಉಲ್ಲೇಖ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ",
+   "select_value_message": "ದಯವಿಟ್ಟು ಮೌಲ್ಯವನ್ನು ಆಯ್ಕೆಮಾಡಿ",
+   "enter_value_message": "ದಯವಿಟ್ಟು ಒಂದು ಮೌಲ್ಯವನ್ನು ನಮೂದಿಸಿ",
+-  "invalid_input": "ಅಮಾನ್ಯ ಇನ್\u200Cಪುಟ್",
++  "invalid_input": "ಅಮಾನ್ಯ ಇನ್‌ಪುಟ್",
+   "reference_number_validation": "ದಯವಿಟ್ಟು ಉಲ್ಲೇಖ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ",
+   "referenceNumber": "{language, select, eng{Reference Number} ara{رقم المرجع} fra{Numéro de réference} kan{ಉಲ್ಲೇಖ ಸಂಖ್ಯೆ} hin{संदर्भ संख्या} tam{குறிப்பு எண்} other{Reference Number}}",
+   "@referenceNumber": {
+@@ -158,7 +158,7 @@
+       }
+     }
+   },
+-  "total_selected_application": "{selected}/{total} ಅಪ್ಲಿಕೇಶನ್\u200Cಗಳನ್ನು ಆಯ್ಕೆಮಾಡಲಾಗಿದೆ",
++  "total_selected_application": "{selected}/{total} ಅಪ್ಲಿಕೇಶನ್‌ಗಳನ್ನು ಆಯ್ಕೆಮಾಡಲಾಗಿದೆ",
+   "@total_selected_application": {
+     "description": "A message with a two parameter",
+     "placeholders": {
+@@ -317,15 +317,15 @@
+   "enter_application_id": "ದಯವಿಟ್ಟು ಅಪ್ಲಿಕೇಶನ್ ಐಡಿಯನ್ನು ನಮೂದಿಸಿ",
+   "prid_length_greater": "ಅಪ್ಲಿಕೇಶನ್ ID ನಿಖರವಾಗಿ {length} ಅಂಕೆಗಳಾಗಿರಬೇಕು.",
+   "@prid_length_greater": {
+-     "placeholders": {
+-         "length": {
+-          "type": "int"
+-         }
+-     }
++    "placeholders": {
++      "length": {
++        "type": "int"
++      }
++    }
+   },
+   "okay": "ಸರಿ",
+   "no_internet_connection": "ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕವಿಲ್ಲ!",
+-  "connect_and_retry": "ದಯವಿಟ್ಟು ಇಂಟರ್ನೆಟ್\u200Cನೊಂದಿಗೆ ಸಂಪರ್ಕಿಸಿ ಮತ್ತು ಮರುಪ್ರಯತ್ನಿಸಿ.",
++  "connect_and_retry": "ದಯವಿಟ್ಟು ಇಂಟರ್ನೆಟ್‌ನೊಂದಿಗೆ ಸಂಪರ್ಕಿಸಿ ಮತ್ತು ಮರುಪ್ರಯತ್ನಿಸಿ.",
+   "retry": "ಮರುಪ್ರಯತ್ನಿಸಿ",
+   "key": "ಕೀ",
+   "server_value": "ಸರ್ವರ್ ಮೌಲ್ಯ",
+@@ -340,19 +340,19 @@
+   "scheduled_job_settings": "ನಿಗದಿತ ಉದ್ಯೋಗ ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+   "doc_size_exceeded": "ಫೈಲ್ ಗಾತ್ರ ಮಿತಿ {size} ಮೀರಿದೆ",
+   "@doc_size_exceeded": {
+-       "placeholders": {
+-         "size": {
+-           "type": "String"
+-         }
+-       }
++    "placeholders": {
++      "size": {
++        "type": "String"
++      }
++    }
+   },
+   "age_should_not_be_greater": "ವಯಸ್ಸು {age} ವರ್ಷಗಳಿಗಿಂತ ಹೆಚ್ಚಿರಬಾರದು",
+   "@age_should_not_be_greater": {
+-       "placeholders": {
+-            "age": {
+-            "type": "int"
+-            }
+-       }
++    "placeholders": {
++      "age": {
++        "type": "int"
++      }
++    }
+   },
+   "onboard_officer_biometric": "ಅಧಿಕಾರಿಯ ಬಯೋಮೆಟ್ರಿಕ್ ನೋಂದಣಿ",
+   "update_officer_biometric": "ಅಧಿಕಾರಿಯ ಬಯೋಮೆಟ್ರಿಕ್ ನವೀಕರಣ",
+@@ -361,12 +361,82 @@
+   "search_for_key": "ಕೀಗಾಗಿ ಹುಡುಕಿ",
+   "no_devices_found": "ಯಾವುದೇ ಸಾಧನಗಳು ಕಂಡುಬಂದಿಲ್ಲ",
+   "connect_devices_and_scan": "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಾಧನಗಳನ್ನು ಸಂಪರ್ಕಿಸಿ ಮತ್ತು ಅವುಗಳನ್ನು ಪತ್ತೆಹಚ್ಚಲು 'ಸ್ಕ್ಯಾನ್' ಅನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ",
+-  "search_for_key": "ಕೀಗಾಗಿ ಹುಡುಕಿ",
+   "sync_restart_dialog_message": "ನೀವು ಮರುಪ್ರಾರಂಭ ಕ್ಲಿಕ್ ಮಾಡಿದ ನಂತರ ಅಪ್ಲಿಕೇಶನ್ ಮರುಪ್ರಾರಂಭವಾಗುತ್ತದೆ ಮತ್ತು ನಿಮ್ಮನ್ನು ಲಾಗಿನ್ ಪುಟಕ್ಕೆ ಮರುನಿರ್ದೇಶಿಸಲಾಗುತ್ತದೆ.",
+   "sync_restart_button": "ಮರುಪ್ರಾರಂಭ",
+   "app_restart_message": "ಕಾನ್ಫಿಗರೇಶನ್ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ. ಅಪ್ಲಿಕೇಶನ್ ಅನ್ನು ಮರುಪ್ರಾರಂಭಿಸಲಾಗುತ್ತಿದೆ...",
+   "select_option": "ಆಯ್ಕೆಯನ್ನು ಆರಿಸಿ",
+   "cron_expression": "ಕ್ರಾನ್ ಎಕ್ಸ್‌ಪ್ರೆಶನ್",
+   "id": "ID",
+-  "name": "ಹೆಸರು"
++  "name": "ಹೆಸರು",
++  "liveness_passive_checking": "Checking face liveness…",
++  "liveness_challenge_blink": "Please blink",
++  "liveness_challenge_smile": "Please smile",
++  "liveness_challenge_turn_left": "Please turn your head to the left",
++  "liveness_challenge_turn_right": "Please turn your head to the right",
++  "liveness_challenge_look_left": "Please look to the left",
++  "liveness_challenge_look_right": "Please look to the right",
++  "liveness_challenge_look_up": "Please look up",
++  "liveness_challenge_look_down": "Please look down",
++  "liveness_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_challenge_open_mouth": "Please open your mouth",
++  "liveness_feedback_continue": "Please continue",
++  "liveness_feedback_action_detected": "Action detected",
++  "liveness_feedback_hold_still": "Hold still",
++  "liveness_feedback_captured": "Good, face captured successfully",
++  "liveness_failure_liveness": "We could not verify face liveness. Please try again.",
++  "liveness_failure_pad": "Face verification could not be completed. Please try again.",
++  "liveness_failure_max_retries": "Face verification could not be completed. Please follow the recovery process.",
++  "liveness_hint_look_camera": "Look directly at the camera.",
++  "liveness_hint_face_visible": "Ensure your face is clearly visible.",
++  "liveness_hint_lighting": "Improve lighting.",
++  "liveness_hint_capture_area": "Keep your face within the capture area.",
++  "liveness_hint_follow_prompt": "Follow the prompted action.",
++  "liveness_error_device_unavailable": "No camera device found",
++  "liveness_error_device_disconnected": "Device connection lost. Please reconnect.",
++  "liveness_error_camera_unavailable": "Camera not available",
++  "liveness_error_face_not_detected": "Keep your face within the capture area",
++  "liveness_error_multiple_faces": "Only one person should be in view",
++  "liveness_error_poor_quality_small": "Move closer to the camera",
++  "liveness_error_poor_quality_dark": "Improve lighting",
++  "liveness_error_poor_quality_blurry": "Hold still and keep the camera in focus",
++  "liveness_error_invalid_frame": "Device error. Please try again.",
++  "liveness_error_active_required": "We could not verify face liveness. Please try again.",
++  "liveness_error_challenge_failed": "We could not verify face liveness. Please try again. Follow the prompted action.",
++  "liveness_error_challenge_timeout": "We could not verify face liveness. Please try again. Respond within the time shown.",
++  "liveness_error_engine": "Face verification unavailable",
++  "liveness_spoken_challenge_blink": "Please blink",
++  "liveness_spoken_challenge_smile": "Please smile",
++  "liveness_spoken_challenge_turn_left": "Please turn your head to the left",
++  "liveness_spoken_challenge_turn_right": "Please turn your head to the right",
++  "liveness_spoken_challenge_look_left": "Please look to the left",
++  "liveness_spoken_challenge_look_right": "Please look to the right",
++  "liveness_spoken_challenge_look_up": "Please look up",
++  "liveness_spoken_challenge_look_down": "Please look down",
++  "liveness_spoken_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_spoken_challenge_open_mouth": "Please open your mouth",
++  "liveness_ui_badge_checking": "Checking",
++  "liveness_ui_badge_challenge": "Challenge",
++  "liveness_ui_badge_not_verified": "Not verified",
++  "liveness_ui_badge_stopped": "Stopped",
++  "liveness_ui_badge_retry": "Retry available",
++  "liveness_ui_badge_device_error": "Device error",
++  "liveness_ui_badge_verified": "Verified",
++  "liveness_ui_try_again": "Try again",
++  "liveness_ui_rescan": "Re-scan devices",
++  "liveness_ui_offline": "Offline: last synced configuration in use",
++  "liveness_ui_online": "Online",
++  "liveness_ui_attempt": "Attempt {current} of {max}",
++  "@liveness_ui_attempt": {
++    "placeholders": {
++      "current": {
++        "type": "int"
++      },
++      "max": {
++        "type": "int"
++      }
++    }
++  },
++  "liveness_ui_title_resident": "Resident face capture",
++  "liveness_ui_title_operator": "Operator authentication",
++  "liveness_ui_title_supervisor": "Supervisor authentication"
+ }
+diff --git a/assets/l10n/app_ta.arb b/assets/l10n/app_ta.arb
+index 12ecdf7..4164262 100644
+--- a/assets/l10n/app_ta.arb
++++ b/assets/l10n/app_ta.arb
+@@ -70,7 +70,7 @@
+       }
+     }
+   },
+-  "notificationLanguage": "{language, select, eng{Notification Languages} ara{لغات الإخطار} fra{Langues de notification} hin{अधिसूचना भाषाएँ} kan{ಅಧಿಸೂಚನೆ ಭಾಷೆಗಳು} tam{அறிவிப்பு மொழிகள்} other{Notification Languages}}",
++  "notificationLanguage": "{language, select, eng{Preferred Language of Communication} ara{لغة التواصل المفضلة} fra{Langue de communication préférée} hin{संचार की पसंदीदा भाषा} kan{ಸಂವಹನದ ಆದ್ಯತೆಯ ಭಾಷೆ} tam{விருப்பமான தொடர்பு மொழி} other{Notification Languages}}",
+   "@notificationLanguage": {
+     "description": "Notification Language Label",
+     "placeholders": {
+@@ -115,15 +115,6 @@
+       }
+     }
+   },
+-  "notificationLanguage": "{language, select, eng{Preferred Language of Communication} ara{لغة التواصل المفضلة} fra{Langue de communication préférée} hin{संचार की पसंदीदा भाषा} kan{ಸಂವಹನದ ಆದ್ಯತೆಯ ಭಾಷೆ} tam{விருப்பமான தொடர்பு மொழி} other{Notification Languages}}",
+-  "@notificationLanguage": {
+-    "description": "Notification Language Label",
+-    "placeholders": {
+-      "language": {
+-        "type": "String"
+-      }
+-    }
+-  },
+   "dataEntryLanguage": "{language, select, eng{Data Entry Language} ara{لغة إدخال البيانات} fra{Langue de saisie des données} hin{डाटा एंट्री भाषा} kan{ಡೇಟಾ ಎಂಟ್ರಿ ಭಾಷೆ} tam{தரவு நுழைவு மொழி} other{Notification Languages}}",
+   "@dataEntryLanguage": {
+     "description": "Data Entry Language Label",
+@@ -326,11 +317,11 @@
+   "enter_application_id": "விண்ணப்ப ஐடியை உள்ளிடவும்",
+   "prid_length_greater": "விண்ணப்ப ஐடி சரியாக {length} இலக்கங்களாக இருக்க வேண்டும்.",
+   "@prid_length_greater": {
+-     "placeholders": {
+-        "length": {
+-          "type": "int"
+-        }
+-     }
++    "placeholders": {
++      "length": {
++        "type": "int"
++      }
++    }
+   },
+   "okay": "சரி",
+   "no_internet_connection": "இணைய இணைப்பு இல்லை!",
+@@ -349,19 +340,19 @@
+   "scheduled_job_settings": "திட்டமிடப்பட்ட வேலை அமைப்புகள்",
+   "doc_size_exceeded": "கோப்பின் அளவு {size} வரம்பை மீறுகிறது",
+   "@doc_size_exceeded": {
+-       "placeholders": {
+-         "size": {
+-           "type": "String"
+-         }
+-       }
++    "placeholders": {
++      "size": {
++        "type": "String"
++      }
++    }
+   },
+   "age_should_not_be_greater": "வயது {age} ஆண்டுகளுக்கு அதிகமாக இருக்கக்கூடாது",
+   "@age_should_not_be_greater": {
+-       "placeholders": {
+-            "age": {
+-            "type": "int"
+-            }
+-       }
++    "placeholders": {
++      "age": {
++        "type": "int"
++      }
++    }
+   },
+   "onboard_officer_biometric": "அதிகாரியின் பயோமெட்ரிக் பதிவு",
+   "update_officer_biometric": "அதிகாரியின் பயோமெட்ரிக் புதுப்பிப்பு",
+@@ -370,12 +361,82 @@
+   "search_for_key": "விசையைத் தேடவும்",
+   "no_devices_found": "சாதனங்கள் எதுவும் கண்டுபிடிக்கப்படவில்லை",
+   "connect_devices_and_scan": "தயவுசெய்து உங்கள் சாதனங்களை இணைத்து, அவற்றைக் கண்டறிய 'ஊடுகதிர்' என்பதைத் தட்டவும்",
+-  "search_for_key": "விசையைத் தேடவும்",
+   "sync_restart_dialog_message": "மறுதொடக்கம் என்பதைக் கிளிக் செய்தவுடன் பயன்பாடு மறுதொடங்கும், மற்றும் நீங்கள் உள்நுழைவு பக்கத்திற்கு திருப்பிவிடப்படுவீர்கள்.",
+   "sync_restart_button": "மறுதொடக்கம்",
+   "app_restart_message": "உள்ளமைவு வெற்றிகரமாக சேமிக்கப்பட்டது. பயன்பாட்டை மறுதொடக்கம் செய்கிறது...",
+   "select_option": "விருப்பத்தைத் தேர்ந்தெடுக்கவும்",
+   "cron_expression": "கிரான் வெளிப்பாடு",
+   "id": "ஐடி",
+-  "name": "பெயர்"
++  "name": "பெயர்",
++  "liveness_passive_checking": "Checking face liveness…",
++  "liveness_challenge_blink": "Please blink",
++  "liveness_challenge_smile": "Please smile",
++  "liveness_challenge_turn_left": "Please turn your head to the left",
++  "liveness_challenge_turn_right": "Please turn your head to the right",
++  "liveness_challenge_look_left": "Please look to the left",
++  "liveness_challenge_look_right": "Please look to the right",
++  "liveness_challenge_look_up": "Please look up",
++  "liveness_challenge_look_down": "Please look down",
++  "liveness_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_challenge_open_mouth": "Please open your mouth",
++  "liveness_feedback_continue": "Please continue",
++  "liveness_feedback_action_detected": "Action detected",
++  "liveness_feedback_hold_still": "Hold still",
++  "liveness_feedback_captured": "Good, face captured successfully",
++  "liveness_failure_liveness": "We could not verify face liveness. Please try again.",
++  "liveness_failure_pad": "Face verification could not be completed. Please try again.",
++  "liveness_failure_max_retries": "Face verification could not be completed. Please follow the recovery process.",
++  "liveness_hint_look_camera": "Look directly at the camera.",
++  "liveness_hint_face_visible": "Ensure your face is clearly visible.",
++  "liveness_hint_lighting": "Improve lighting.",
++  "liveness_hint_capture_area": "Keep your face within the capture area.",
++  "liveness_hint_follow_prompt": "Follow the prompted action.",
++  "liveness_error_device_unavailable": "No camera device found",
++  "liveness_error_device_disconnected": "Device connection lost. Please reconnect.",
++  "liveness_error_camera_unavailable": "Camera not available",
++  "liveness_error_face_not_detected": "Keep your face within the capture area",
++  "liveness_error_multiple_faces": "Only one person should be in view",
++  "liveness_error_poor_quality_small": "Move closer to the camera",
++  "liveness_error_poor_quality_dark": "Improve lighting",
++  "liveness_error_poor_quality_blurry": "Hold still and keep the camera in focus",
++  "liveness_error_invalid_frame": "Device error. Please try again.",
++  "liveness_error_active_required": "We could not verify face liveness. Please try again.",
++  "liveness_error_challenge_failed": "We could not verify face liveness. Please try again. Follow the prompted action.",
++  "liveness_error_challenge_timeout": "We could not verify face liveness. Please try again. Respond within the time shown.",
++  "liveness_error_engine": "Face verification unavailable",
++  "liveness_spoken_challenge_blink": "Please blink",
++  "liveness_spoken_challenge_smile": "Please smile",
++  "liveness_spoken_challenge_turn_left": "Please turn your head to the left",
++  "liveness_spoken_challenge_turn_right": "Please turn your head to the right",
++  "liveness_spoken_challenge_look_left": "Please look to the left",
++  "liveness_spoken_challenge_look_right": "Please look to the right",
++  "liveness_spoken_challenge_look_up": "Please look up",
++  "liveness_spoken_challenge_look_down": "Please look down",
++  "liveness_spoken_challenge_eyes_closed_hold": "Please close your eyes and hold",
++  "liveness_spoken_challenge_open_mouth": "Please open your mouth",
++  "liveness_ui_badge_checking": "Checking",
++  "liveness_ui_badge_challenge": "Challenge",
++  "liveness_ui_badge_not_verified": "Not verified",
++  "liveness_ui_badge_stopped": "Stopped",
++  "liveness_ui_badge_retry": "Retry available",
++  "liveness_ui_badge_device_error": "Device error",
++  "liveness_ui_badge_verified": "Verified",
++  "liveness_ui_try_again": "Try again",
++  "liveness_ui_rescan": "Re-scan devices",
++  "liveness_ui_offline": "Offline: last synced configuration in use",
++  "liveness_ui_online": "Online",
++  "liveness_ui_attempt": "Attempt {current} of {max}",
++  "@liveness_ui_attempt": {
++    "placeholders": {
++      "current": {
++        "type": "int"
++      },
++      "max": {
++        "type": "int"
++      }
++    }
++  },
++  "liveness_ui_title_resident": "Resident face capture",
++  "liveness_ui_title_operator": "Operator authentication",
++  "liveness_ui_title_supervisor": "Supervisor authentication"
+ }
