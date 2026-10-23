@@ -40,7 +40,7 @@ $(cat "$ROOT/docs/perf/emulator_stages.md")
 
 - No real phone and no Windows machine were measured. The emulator runs on the Mac's chip and says nothing about a low-end phone.
 - Total per processed frame is the sum of the stages; at 10 fps the engine has 100 ms per frame, so on these numbers it does not keep up with every frame: the load shedder (CNN every Nth frame, oldest frames dropped, the PAD voters never skipped) is what keeps the producer unblocked. The measured effect of that mode on accuracy is not yet available (needs recordings).
-- In the engine the passive voters run once per decision, but during a challenge the re-evaluation runs the PAD voters on every processed frame, so the moire FFT cost matters most there.
-- The largest cost is the moire FFT; a cheaper variant is the first thing to try for a low-resource mode.
+- The moire peak test was made about 8x cheaper without changing its result (BUILD_LOG #64 follow-up). The largest stages now are the face detector and the embedding. The detector runs again inside several voters (texture, moire, and the re-evaluation's wrappers), so passing the engine's own detection to the voters is the next saving; it is not done yet.
+- During a challenge the re-evaluation runs the PAD voters on every processed frame, so per-frame cost matters most there.
 EOF
 } > "$ROOT/docs/PERFORMANCE.md"
