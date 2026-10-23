@@ -1,0 +1,261 @@
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index 15ddfd4..e9abd04 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -133,6 +133,9 @@ flutter {
+ }
+ 
+ dependencies {
++    // SAJEEV liveness engine (ticket #48/#52)
++    implementation files('libs/sajeev-engine.aar')
++    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.19.2'
+     def fragment_version = "1.4.1"
+     def room_version = "2.4.0"
+ 
+diff --git a/android/app/src/main/java/io/mosip/registration_client/MainActivity.java b/android/app/src/main/java/io/mosip/registration_client/MainActivity.java
+index 27a9833..19504c3 100644
+--- a/android/app/src/main/java/io/mosip/registration_client/MainActivity.java
++++ b/android/app/src/main/java/io/mosip/registration_client/MainActivity.java
+@@ -85,6 +85,8 @@ import io.mosip.registration_client.api_services.MasterDataSyncApi;
+ import io.mosip.registration_client.api_services.ProcessSpecDetailsApi;
+ import io.mosip.registration_client.api_services.RegistrationApi;
+ import io.mosip.registration_client.api_services.SecureScreenApi;
++import io.mosip.registration_client.api_services.LivenessApi;
++import io.mosip.registration_client.model.LivenessPigeon;
+ import io.mosip.registration_client.api_services.TransliterationApi;
+ import io.mosip.registration_client.api_services.UserDetailsApi;
+ import io.mosip.registration_client.model.AuditResponsePigeon;
+@@ -205,6 +207,9 @@ public class MainActivity extends FlutterActivity {
+     @Inject
+     SecureScreenApi secureScreenApi;
+ 
++    @Inject
++    LivenessApi livenessApi;
++
+     private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+         @Override
+         public void onReceive(Context context, Intent intent) {
+@@ -420,6 +425,8 @@ public class MainActivity extends FlutterActivity {
+         GlobalConfigSettingsPigeon.GlobalConfigSettingsApi.setup(flutterEngine.getDartExecutor().getBinaryMessenger(), globalConfigSettingsApi);
+         SecureScreenPigeon.SecureScreenApi.setup(flutterEngine.getDartExecutor().getBinaryMessenger(), secureScreenApi);
+         secureScreenApi.setCallbackActivity(this);
++        LivenessPigeon.LivenessApi.setup(flutterEngine.getDartExecutor().getBinaryMessenger(), livenessApi);
++        livenessApi.attach(getApplicationContext(), flutterEngine.getDartExecutor().getBinaryMessenger());
+     }
+ 
+     @Override
+diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
+new file mode 100644
+index 0000000..af64dd6
+--- /dev/null
++++ b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
+@@ -0,0 +1,99 @@
++/*
++ * SAJEEV liveness bridge (ticket #52). Copyright (c) SAJEEV contributors. MPL-2.0.
++ */
++
++package io.mosip.registration_client.api_services;
++
++import android.content.Context;
++
++import androidx.annotation.NonNull;
++
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++
++import javax.inject.Inject;
++import javax.inject.Singleton;
++
++import io.flutter.plugin.common.BinaryMessenger;
++import io.mosip.registration_client.model.LivenessPigeon;
++import io.sajeev.engine.android.AndroidLivenessController;
++
++/** Host side of the liveness pigeon. Engine work runs on a worker thread, never the platform main thread. */
++@Singleton
++public class LivenessApi implements LivenessPigeon.LivenessApi {
++
++    static final String SBI_PACKAGE = "io.mosip.mock.sbi";
++    static final String FEED_CLASS = "io.mosip.mock.sbi.feed.FrameFeedService";
++
++    private final ExecutorService worker = Executors.newSingleThreadExecutor();
++    private AndroidLivenessController controller;
++    private LivenessPigeon.LivenessEvents events;
++
++    @Inject
++    public LivenessApi() {
++    }
++
++    /** Called from MainActivity once the Flutter engine exists. */
++    public synchronized void attach(Context context, BinaryMessenger messenger) {
++        events = new LivenessPigeon.LivenessEvents(messenger);
++        controller = new AndroidLivenessController(context, SBI_PACKAGE, FEED_CLASS, (id, p) ->
++                events.onProgress(id, toDto(p), new LivenessPigeon.LivenessEvents.Reply<Void>() {
++                    @Override
++                    public void reply(Void v) {
++                        // fire and forget
++                    }
++                }));
++    }
++
++    static LivenessPigeon.LivenessProgressDto toDto(AndroidLivenessController.Progress p) {
++        LivenessPigeon.LivenessProgressDto.Builder b = new LivenessPigeon.LivenessProgressDto.Builder();
++        b.setPhase(p.phase);
++        b.setChallengeKey(p.challengeKey);
++        b.setGuidanceKey(p.guidanceKey);
++        b.setReason(p.reason);
++        b.setMock(p.mock);
++        b.setLimited(p.limited);
++        return b.build();
++    }
++
++    @Override
++    public void start(@NonNull String workflow, @NonNull LivenessPigeon.Result<String> result) {
++        worker.execute(() -> {
++            try {
++                result.success(controller().start(workflow));
++            } catch (Exception e) {
++                result.error(e);
++            }
++        });
++    }
++
++    @NonNull
++    @Override
++    public LivenessPigeon.LivenessProgressDto progress(@NonNull String sessionId) {
++        return toDto(controller().progress(sessionId));
++    }
++
++    @Override
++    public void checkCapture(@NonNull String sessionId, @NonNull byte[] capturedImage, @NonNull Long captureTimeoutMs,
++                             @NonNull LivenessPigeon.Result<Boolean> result) {
++        worker.execute(() -> {
++            try {
++                result.success(controller().checkCapture(sessionId, capturedImage, captureTimeoutMs));
++            } catch (Exception e) {
++                result.error(e);
++            }
++        });
++    }
++
++    @Override
++    public void abort(@NonNull String sessionId) {
++        controller().abort(sessionId);
++    }
++
++    private synchronized AndroidLivenessController controller() {
++        if (controller == null) {
++            throw new IllegalStateException("liveness bridge not attached");
++        }
++        return controller;
++    }
++}
+diff --git a/pigeon.sh b/pigeon.sh
+index dea5aef..739c089 100644
+--- a/pigeon.sh
++++ b/pigeon.sh
+@@ -62,4 +62,6 @@ dart run pigeon --input pigeon/dash_board.dart --dart_out lib/pigeon/dash_board_
+ dart run pigeon --input pigeon/global_config_settings.dart --dart_out lib/pigeon/global_config_settings_pigeon.dart --objc_header_out ios/Runner/pigeon.h --objc_source_out ios/Runner/pigeon.m --java_out ./android/app/src/main/java/io/mosip/registration_client/model/GlobalConfigSettingsPigeon.java --java_package "io.mosip.registration_client.model"
+ 
+ # Generate secure screen files
+-dart run pigeon --input pigeon/secure_screen.dart --dart_out lib/pigeon/secure_screen_pigeon.dart --objc_header_out ios/Runner/pigeon.h --objc_source_out ios/Runner/pigeon.m --java_out ./android/app/src/main/java/io/mosip/registration_client/model/SecureScreenPigeon.java --java_package "io.mosip.registration_client.model"
+\ No newline at end of file
++dart run pigeon --input pigeon/secure_screen.dart --dart_out lib/pigeon/secure_screen_pigeon.dart --objc_header_out ios/Runner/pigeon.h --objc_source_out ios/Runner/pigeon.m --java_out ./android/app/src/main/java/io/mosip/registration_client/model/SecureScreenPigeon.java --java_package "io.mosip.registration_client.model"
++# Generate liveness pigeon files (SAJEEV, ticket #52)
++dart run pigeon --input pigeon/liveness.dart --dart_out lib/pigeon/liveness_pigeon.dart --java_out ./android/app/src/main/java/io/mosip/registration_client/model/LivenessPigeon.java --java_package "io.mosip.registration_client.model"
+diff --git a/pigeon/liveness.dart b/pigeon/liveness.dart
+new file mode 100644
+index 0000000..e470487
+--- /dev/null
++++ b/pigeon/liveness.dart
+@@ -0,0 +1,48 @@
++import 'package:pigeon/pigeon.dart';
++
++/// SAJEEV liveness (ticket #52). Frames never cross this bridge: the Java side feeds the engine
++/// from the SBI app's frame feed. Flutter only starts a session, reads progress and asks for the capture check.
++class LivenessProgressDto {
++  /// RUNNING, LIVE, NOT_LIVE or UNAVAILABLE. Only LIVE allows the capture.
++  final String phase;
++  /// Message key of the challenge to show now (for example challenge.blink), or null.
++  final String? challengeKey;
++  /// Message key of the guidance or error to show, or null.
++  final String? guidanceKey;
++  /// Short machine-readable reason, for audit.
++  final String reason;
++  /// True when the frames come from a mock device.
++  final bool mock;
++  /// True for the capture-only tier: never show it as full liveness.
++  final bool limited;
++
++  LivenessProgressDto({
++    required this.phase,
++    this.challengeKey,
++    this.guidanceKey,
++    required this.reason,
++    required this.mock,
++    required this.limited,
++  });
++}
++
++@HostApi()
++abstract class LivenessApi {
++  /// Starts a session for RESIDENT, OPERATOR or SUPERVISOR and returns its id.
++  @async
++  String start(String workflow);
++
++  LivenessProgressDto progress(String sessionId);
++
++  /// Checks the captured face (JPEG or PNG bytes) against the live face. True only when bound.
++  @async
++  bool checkCapture(String sessionId, Uint8List capturedImage, int captureTimeoutMs);
++
++  void abort(String sessionId);
++}
++
++/// Pushed from Java whenever the phase, the challenge or the guidance changes.
++@FlutterApi()
++abstract class LivenessEvents {
++  void onProgress(String sessionId, LivenessProgressDto progress);
++}
+diff --git a/test/liveness_events_test.dart b/test/liveness_events_test.dart
+new file mode 100644
+index 0000000..da1901e
+--- /dev/null
++++ b/test/liveness_events_test.dart
+@@ -0,0 +1,37 @@
++// SAJEEV #52: the Dart side receives the progress events that the Java side pushes (mocked channel, no device needed).
++import 'package:flutter_test/flutter_test.dart';
++import 'package:flutter/services.dart';
++import 'package:registration_client/pigeon/liveness_pigeon.dart';
++
++class _Receiver extends LivenessEvents {
++  final List<String> seen = [];
++  @override
++  void onProgress(String sessionId, LivenessProgressDto progress) {
++    seen.add('$sessionId:${progress.phase}:${progress.guidanceKey}:${progress.mock}');
++  }
++}
++
++void main() {
++  TestWidgetsFlutterBinding.ensureInitialized();
++
++  test('test_state_events_reach_flutter', () async {
++    final r = _Receiver();
++    LivenessEvents.setup(r);
++    final codec = LivenessEvents.codec;
++    final msg = codec.encodeMessage(<Object?>[
++      's1',
++      LivenessProgressDto(phase: 'RUNNING', guidanceKey: 'error.face_not_detected', reason: 'running', mock: true, limited: false),
++    ]);
++    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++        .handlePlatformMessage('dev.flutter.pigeon.registration_client.LivenessEvents.onProgress', msg, (_) {});
++    expect(r.seen, ['s1:RUNNING:error.face_not_detected:true']);
++  });
++
++  test('host api start returns the session id from the channel', () async {
++    const ch = 'dev.flutter.pigeon.registration_client.LivenessApi.start';
++    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMessageHandler(ch, (ByteData? m) async {
++      return LivenessApi.codec.encodeMessage(<Object?>['session-42']);
++    });
++    expect(await LivenessApi().start('RESIDENT'), 'session-42');
++  });
++}

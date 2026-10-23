@@ -3,3 +3,4 @@
 -keep class ai.onnxruntime.** { *; }
 -dontwarn java.awt.**
 -dontwarn javax.imageio.**
+-keepattributes InnerClasses,EnclosingMethod,Signature,Exceptions,*Annotation*
