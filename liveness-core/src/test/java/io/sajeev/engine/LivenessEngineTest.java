@@ -184,4 +184,22 @@ class LivenessEngineTest {
                 "a still photo was accepted as live: " + s.verdict().tier());
         s.abort();
     }
+
+    @Test
+    void test_a_stream_below_the_minimum_fps_is_reported_not_judged() throws Exception {
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+        byte[] jpeg = file("one_face.jpg");
+        long t = 1_000_000_000L;
+        for (int i = 0; i < 40 && s.verdict() == null; i++) {
+            s.onFrame(new Frame(jpeg, t + i * 500_000_000L, i)); // 2 fps of frame time
+            Thread.sleep(40);
+        }
+        long end = System.currentTimeMillis() + 20000;
+        while (s.verdict() == null && System.currentTimeMillis() < end) {
+            Thread.sleep(50);
+        }
+        assertEquals(Verdict.Tier.CANNOT_JUDGE, s.verdict().tier());
+        assertEquals(ErrorState.DEVICE_UNAVAILABLE, s.verdict().error().get());
+        assertEquals("stream_below_min_fps", s.verdict().reason());
+    }
 }

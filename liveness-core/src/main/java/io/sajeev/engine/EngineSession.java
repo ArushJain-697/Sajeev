@@ -91,6 +91,7 @@ public final class EngineSession implements LivenessSession {
     private long currentArrivalNanos;
     private long firstArrivalNanos = -1;
     private long usableCount;
+    private long arrivalsCount;
     private volatile ErrorState lastTrackerError;
     private final long startedAtMillis = System.currentTimeMillis();
     private double avgProcessingMs;
@@ -305,6 +306,12 @@ public final class EngineSession implements LivenessSession {
         }
         PixelImage img = analysis.image(f);
         boolean take = guard.onArrival(img != null);
+        arrivalsCount++;
+        if (state == State.PASSIVE && arrivalsCount >= 5 && guard.flags().contains(FrameFlag.DEVICE_INADEQUATE)) {
+            // the PDF minimum (3 fps, config minFps) is not met: say so instead of judging a stream that is too slow
+            finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.DEVICE_UNAVAILABLE, "stream_below_min_fps");
+            return;
+        }
         if (guard.flags().contains(FrameFlag.INVALID_FRAME_DATA) && img == null) {
             lastTrackerError = ErrorState.INVALID_FRAME_DATA;
         }
