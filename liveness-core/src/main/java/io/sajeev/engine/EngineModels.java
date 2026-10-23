@@ -36,6 +36,10 @@ public final class EngineModels implements AutoCloseable {
         return detector;
     }
 
+    public io.sajeev.face.LandmarkModel landmarks() {
+        return landmarks;
+    }
+
     public io.sajeev.passive.texture.MiniFasNetModel minifasV2() {
         return minifasV2;
     }
