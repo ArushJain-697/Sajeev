@@ -1,7 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- #01. UNTESTED. Dependencies (ONNX Runtime, EJML, JTransforms, JUnit 5, jqwik) are added by the owning tickets. -->
+<!-- #60: the evaluation harness (run_eval). Runs the same engine as the clients. -->
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
   <parent><groupId>io.sajeev</groupId><artifactId>sajeev-parent</artifactId><version>0.1.0-SNAPSHOT</version></parent>
   <artifactId>eval</artifactId>
+  <dependencies>
+    <dependency><groupId>io.sajeev</groupId><artifactId>liveness-api</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>io.sajeev</groupId><artifactId>liveness-core</artifactId><version>${project.version}</version></dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.6.1</version>
+        <executions>
+          <execution>
+            <id>classpath-for-run-eval</id>
+            <phase>package</phase>
+            <goals><goal>build-classpath</goal></goals>
+            <configuration><outputFile>${project.build.directory}/cp.txt</outputFile></configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>
