@@ -63,6 +63,9 @@ import java.util.function.BiFunction;
 /** The engine's session. Not part of the frozen API beyond {@link LivenessSession}; the extra methods serve the clients and the bench. */
 public final class EngineSession implements LivenessSession {
 
+    /** Lowest measured fps at which a BLINK challenge may be issued. Set from the blink recall experiment (eval/blink, #61). */
+    public static final int BLINK_MIN_FPS = 15;
+
     private final LivenessEngine engine;
     private final Workflow workflow;
     private final PolicyConfig policy;
@@ -428,7 +431,7 @@ public final class EngineSession implements LivenessSession {
             pool.add(ChallengeType.valueOf(t.trim()));
         }
         long timeout = Long.parseLong(engine.config.value("active.challengeTimeoutMs", name()));
-        ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(8.0, 3.0, new SecureRandom()), pool,
+        ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(BLINK_MIN_FPS, 3.0, new SecureRandom()), pool,
                 policy.minChallenges(), timeout);
         challenge = ce.newAttempt(guard.measuredFps());
         if (challenge == null) {

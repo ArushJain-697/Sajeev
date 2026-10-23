@@ -1,0 +1,11 @@
+| fps | blink recall | |
+|---|---|---|
+| 3 | 36.7% | ########### |
+| 5 | 58.3% | ################## |
+| 8 | 83.3% | ######################### |
+| 10 | 88.3% | ########################### |
+| 15 | 96.7% | ############################# |
+| 30 | 100.0% | ############################## |
+
+Source of the traces: SYNTHETIC blinks of 100, 150, 200, 250, 300 and 400 ms (raised-cosine EAR dip). NOT real people: re-run with real traces before trusting the chosen value.
+CHOSEN_BLINK_MIN_FPS=15

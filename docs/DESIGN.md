@@ -40,7 +40,7 @@ Safety laws, tested as properties over 10,000 generated cases each plus a mutati
 
 - Ten types: blink, smile, turn left, turn right, look left, look right, look up, look down, close eyes and hold, open mouth.
 - Drawn with `SecureRandom` per attempt: `active.minChallenges` (2) distinct types in random order; every retry draws a new sequence. The person never picks.
-- Blink is only issued when the measured fps is at least the blink minimum (8 fps TARGET; to be set from the recall-vs-fps experiment #61); the others need the PDF minimum of 3 fps. If the pool is empty at this fps there is no attempt (LIMITED), never a silent pass.
+- Blink is only issued when the measured fps is at least the blink minimum (15 fps, chosen by the recall-vs-fps experiment #61 on SYNTHETIC blinks; to be re-chosen from real blinks); the others need the PDF minimum of 3 fps. If the pool is empty at this fps there is no attempt (LIMITED), never a silent pass.
 - A challenge counts only on frames after the prompt (one-frame guard), within `active.challengeTimeoutMs` (5000).
 - Gaze and closed-eye detectors are validated on synthetic images only so far.
 
