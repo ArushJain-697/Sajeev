@@ -451,3 +451,5 @@
 ## #58 low-resource optimisation: PARTIAL (23 Oct 2026)
 - Done: `FrameAnalysis` (decode and detect each frame once, shared by the engine, the texture voter, the moire voter and the re-evaluation's wrappers; cache of the last 12 frames, cleared when the session ends). Before, one challenge frame was decoded and detected up to four times. Test `test_frame_is_decoded_and_detected_once`; all other tests pass unchanged. Already in place from earlier tickets: frame skipping (PERIODIC mode), load shedding that drops the oldest frames and runs the CNN every Nth frame but never skips a PAD voter (#33 tests), the moire speed-up.
 - **Not done:** the real-phone before/after table, NNAPI/XNNPACK on a phone, and `test_accuracy_unchanged_within_tolerance_in_low_resource_mode` (needs recordings); smaller model inputs were not tried. The emulator is not a phone.
+
+## #70 SBI Android stream note (23 Oct 2026): DONE in the reduced form (D42): one page in `docs/DESIGN.md`; the full proposal document is not written.

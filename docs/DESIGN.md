@@ -64,3 +64,15 @@ After `maxRetries` (3) failures the default is BLOCK with the recovery guidance.
 ## Out of scope / not built
 
 The optional resident sub-policy by age group, alternative challenge pools for declared exceptions, a degradation ladder with classical-only mode. See `BUILD_LOG.md` for the exact limits of each ticket.
+
+## Android frame feed: a note for the SBI maintainers (#70, reduced to one page by decision D42)
+
+**Problem.** On Android the SBI app keeps the camera preview, and the client gets only the capture result through an intent. Liveness needs frames before the capture, so the client cannot judge liveness from the intent result alone.
+
+**What we built (in the mock SBI only, patch `0003`).** A bound service `FrameFeedService` publishes JPEG frames to a subscribing client over a `Messenger`, while the SBI app keeps its own preview. Messages: subscribe, unsubscribe, frame (JPEG, sequence, monotonic time, `mock` flag), acknowledge, stats. The client acknowledges every frame; the service allows a few frames in flight per subscriber and drops frames for a slow one, so a slow client never stalls the SBI preview (tested: a 400 ms subscriber got 2.5 fps while discovery, info and capture kept working).
+
+**Security.** The service needs a signature-level permission (`io.mosip.mock.sbi.permission.FRAME_FEED`), is not exported, and also checks the caller package against an allow-list. A second app signed with another key got `SecurityException: Not allowed to bind`.
+
+**Compatibility.** An SBI app without the feed is still usable: the client falls back to a capture-only check, labelled LIMITED, which can never be shown as full liveness (`CaptureOnlyChecker`).
+
+**What it is not.** This is not part of the MOSIP SBI specification and no SBI vendor implements it. A real device would need to add it. The `mock: true` flag is in the outer device-info JSON, not inside the signed token. A conformance test and a full proposal document are not written (`PROPOSAL_SBI_ANDROID_STREAM.md` stays a stub).
