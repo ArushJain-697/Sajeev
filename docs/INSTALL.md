@@ -7,6 +7,9 @@ State on 23 Oct 2026. Everything below was run on one Apple-silicon Mac; nothing
 - Model files, kept outside git: `yunet/face_detection_yunet_2023mar.onnx`, `landmark/face_landmarks_detector.onnx`, `minifasnet/2.7_80x80_MiniFASNetV2.onnx` and `4_0_0_80x80_MiniFASNetV1SE.onnx` (each with its `.onnx.data` file), `sface/face_recognition_sface_2021dec.onnx`. Sources and licences: `DISCLOSURES.md` (the MiniFASNet weights licence is unverified).
 - For the Android parts: Android SDK, Gradle 8.5, Flutter 3.10.4, an emulator (Android 13 arm64 was used). For the desktop client patches: a checkout of `registration-client` `release-1.2.0.x` at c1cc4e7.
 
+## Signing the models
+The desktop bridge and the Android app refuse models that are not covered by a signed manifest (`manifest.txt`, `manifest.sig` in the model folder). Sign a model folder with `java -cp liveness-core/target/classes io.sajeev.model.ManifestTool sign <models> <version> <private.der> <models>/manifest.txt <models>/manifest.sig`; a key pair is made with `ManifestTool genkey`. The public half is `liveness-core/src/main/resources/model-signing-public.der` (a DEV key: for a real release, MOSIP or you must hold a production key and replace this file). The private key must never be committed.
+
 ## Engine, bench, eval
 ```
 export SAJEEV_MODELS=/path/to/models

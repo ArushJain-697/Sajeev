@@ -101,7 +101,8 @@ public final class AndroidLivenessController {
         if (engine == null) {
             AndroidImageDecoder.install();
             File models = new File(context.getFilesDir(), "models");
-            engine = new LivenessEngine(new EngineModels(models.toPath()), Config.load(new Properties()),
+            // models load only after the signed manifest verifies (ECDSA, bundled trust root); an unsigned or changed model is refused
+            engine = new LivenessEngine(EngineModels.loadVerified(models.toPath(), EngineModels.bundledTrustRoot(), 0), Config.load(new Properties()),
                     EngineSettings.defaults(), new AuditLog(System::currentTimeMillis), new LivenessMetrics());
         }
         return engine;

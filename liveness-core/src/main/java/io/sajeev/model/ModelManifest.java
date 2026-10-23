@@ -35,6 +35,11 @@ public final class ModelManifest {
         return version;
     }
 
+    /** @return true if the signed manifest lists this file */
+    public boolean covers(String name) {
+        return files.containsKey(name);
+    }
+
     /** @return file name to entry, sorted */
     Map<String, Entry> files() {
         return files;
