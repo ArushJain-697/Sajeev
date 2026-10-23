@@ -6611,10 +6611,10 @@ index 0000000..9fd596f
 +}
 diff --git a/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/SajeevLivenessProvider.java b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/SajeevLivenessProvider.java
 new file mode 100644
-index 0000000..d5ca246
+index 0000000..dcebed6
 --- /dev/null
 +++ b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/SajeevLivenessProvider.java
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,152 @@
 +package io.mosip.registration.service.liveness;
 +
 +import java.nio.file.Path;
@@ -6679,7 +6679,15 @@ index 0000000..d5ca246
 +		if (engine == null && !loadFailed) {
 +			try {
 +				Path dir = Paths.get(System.getProperty("mosip.registration.liveness.model.dir", "models"));
-+				engine = new LivenessEngine(new EngineModels(dir), Config.load(new Properties()), EngineSettings.defaults(),
++				// Models load only after the signed manifest verifies. Turning that off is an explicit, logged decision for development.
++				EngineModels models;
++				if ("false".equalsIgnoreCase(System.getProperty("mosip.registration.liveness.model.verify"))) {
++					LOGGER.warn("Model signature verification is switched OFF by mosip.registration.liveness.model.verify=false");
++					models = new EngineModels(dir);
++				} else {
++					models = EngineModels.loadVerified(dir, EngineModels.bundledTrustRoot(), 0);
++				}
++				engine = new LivenessEngine(models, Config.load(new Properties()), EngineSettings.defaults(),
 +						new AuditLog(System::currentTimeMillis), new LivenessMetrics());
 +			} catch (Exception | LinkageError ex) {
 +				LOGGER.error("The liveness engine could not start; every liveness check will be refused", ex);
