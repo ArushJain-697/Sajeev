@@ -9,7 +9,7 @@ for M in liveness-api liveness-core devices desktop-ui bench interop eval; do
   D="$R/$M/src/test/java"; [ -d "$D" ] || continue
   N=$(grep -rhE "^\s*(public )?void [a-zA-Z_0-9]+\(" "$D" | wc -l | tr -d ' ')
   echo; echo "## $M ($N test methods)"; echo
-  grep -rEn "^\s*(public )?void (test_|[a-z][A-Za-z0-9_]*)\(" "$D" --include=*.java | sed -E "s|^$D/||; s|\.java:[0-9]+:\s*(public )?void |: |; s|\(.*||" | sed 's|^|- |'
+  grep -rEn "^\s*(public )?void (test_|[a-z][A-Za-z0-9_]*)\(" "$D" --include=*.java | sed -E "s|^[^:]*/([A-Za-z0-9]+)\.java:[0-9]+:[[:space:]]*(public )?void |\1: |; s|\(.*||; s|^|- |"
 done
 echo; echo "## Android engine library (instrumented, run on the emulator)"; echo
 grep -rEn "public void test_" "$R/integrations/engine-android/engine/src/androidTest" | sed -E "s|.*/([A-Za-z]+)\.java:[0-9]+:\s*public void |- \1: |; s|\(.*||"
