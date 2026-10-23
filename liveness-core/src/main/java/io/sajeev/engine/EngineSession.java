@@ -92,6 +92,9 @@ public final class EngineSession implements LivenessSession {
     private long firstArrivalNanos = -1;
     private long usableCount;
     private long arrivalsCount;
+    /** Arrival times of every frame the device DELIVERED (before any frame is dropped by the bounded queue). */
+    private final java.util.ArrayDeque<Long> delivered = new java.util.ArrayDeque<>();
+    private final double minFps;
     private volatile ErrorState lastTrackerError;
     private final long startedAtMillis = System.currentTimeMillis();
     private double avgProcessingMs;
@@ -112,6 +115,7 @@ public final class EngineSession implements LivenessSession {
         this.workflow = workflow;
         this.policy = policy;
         this.st = engine.settings;
+        this.minFps = Double.parseDouble(engine.config.value("minFps", workflow.name().toLowerCase()));
         this.analysis = new io.sajeev.face.FrameAnalysis(engine.models.detector, 12);
         this.queue = new ArrayBlockingQueue<>(st.queueCapacity);
         this.guard = new FrameGuard(() -> currentArrivalNanos, Double.parseDouble(engine.config.value("minFps", name())),
@@ -144,9 +148,28 @@ public final class EngineSession implements LivenessSession {
         if (!running) {
             return;
         }
+        recordDelivery(frame.arrivalNanos());
         while (!queue.offer(frame)) {
             queue.poll();
         }
+    }
+
+    private static final long RATE_WINDOW_NANOS = 2_000_000_000L;
+
+    private synchronized void recordDelivery(long arrivalNanos) {
+        delivered.addLast(arrivalNanos);
+        while (!delivered.isEmpty() && arrivalNanos - delivered.peekFirst() > RATE_WINDOW_NANOS) {
+            delivered.removeFirst();
+        }
+    }
+
+    /** @return the rate of frames the DEVICE delivered over the last 2 s; load shedding in this engine does not lower it */
+    private synchronized double deliveredFps() {
+        if (delivered.size() < 2) {
+            return Double.MAX_VALUE;
+        }
+        double span = (delivered.peekLast() - delivered.peekFirst()) / 1e9;
+        return span <= 0 ? Double.MAX_VALUE : (delivered.size() - 1) / span;
     }
 
     @Override
@@ -187,9 +210,10 @@ public final class EngineSession implements LivenessSession {
         return lastTrackerError;
     }
 
-    /** @return the frame rate the engine measured on the frames it received (0 until two have arrived) */
+    /** @return the frame rate of the frames the device delivered, as the engine measured it (0 until two have arrived) */
     public double measuredFps() {
-        return guard.measuredFps();
+        double d = deliveredFps();
+        return d == Double.MAX_VALUE ? 0.0 : d;
     }
 
     /** @return the Binding result once checkCapture ran, else null */
@@ -312,7 +336,7 @@ public final class EngineSession implements LivenessSession {
         PixelImage img = analysis.image(f);
         boolean take = guard.onArrival(img != null);
         arrivalsCount++;
-        if (state == State.PASSIVE && arrivalsCount >= 5 && guard.flags().contains(FrameFlag.DEVICE_INADEQUATE)) {
+        if (state == State.PASSIVE && arrivalsCount >= 5 && deliveredFps() < minFps) {
             // the PDF minimum (3 fps, config minFps) is not met: say so instead of judging a stream that is too slow
             finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.DEVICE_UNAVAILABLE, "stream_below_min_fps");
             return;
