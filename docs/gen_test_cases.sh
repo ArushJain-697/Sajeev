@@ -12,7 +12,7 @@ for M in liveness-api liveness-core devices desktop-ui bench interop eval; do
   grep -rEn "^\s*(public )?void (test_|[a-z][A-Za-z0-9_]*)\(" "$D" --include=*.java | sed -E "s|^[^:]*/([A-Za-z0-9]+)\.java:[0-9]+:[[:space:]]*(public )?void |\1: |; s|\(.*||; s|^|- |"
 done
 echo; echo "## Android engine library (instrumented, run on the emulator)"; echo
-grep -rEn "public void test_" "$R/integrations/engine-android/engine/src/androidTest" | sed -E "s|.*/([A-Za-z]+)\.java:[0-9]+:\s*public void |- \1: |; s|\(.*||"
+grep -rEn "public void test_" "$R/integrations/engine-android/engine/src/androidTest" | sed -E "s|^.*/([A-Za-z]+)\.java:[0-9]+:[[:space:]]*public void |- \1: |; s|\(.*||"
 echo; echo "## Client patches (tests inside the patch files)"; echo
 for P in "$R"/integrations/patches/0001*.patch "$R"/integrations/patches/0005*.patch "$R"/integrations/patches/0006*.patch "$R"/integrations/patches/0007*.patch; do
   echo "- $(basename "$P"): $(grep -E '^\+.*(public void test_|void test_|test\(.test_|testWidgets\(.test_| test .test_)' "$P" | wc -l | tr -d ' ') named tests"
