@@ -429,7 +429,7 @@ public final class EngineSession implements LivenessSession {
             pool.add(ChallengeType.valueOf(t.trim()));
         }
         long timeout = Long.parseLong(engine.config.value("active.challengeTimeoutMs", name()));
-        ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(10.0, 3.0, new SecureRandom()), pool,
+        ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(8.0, 3.0, new SecureRandom()), pool,
                 policy.minChallenges(), timeout);
         challenge = ce.newAttempt(guard.measuredFps());
         if (challenge == null) {
