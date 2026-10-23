@@ -13,7 +13,7 @@ index 15ddfd4..e9abd04 100644
      def room_version = "2.4.0"
  
 diff --git a/android/app/src/main/java/io/mosip/registration_client/MainActivity.java b/android/app/src/main/java/io/mosip/registration_client/MainActivity.java
-index 27a9833..19504c3 100644
+index 27a9833..b91b038 100644
 --- a/android/app/src/main/java/io/mosip/registration_client/MainActivity.java
 +++ b/android/app/src/main/java/io/mosip/registration_client/MainActivity.java
 @@ -85,6 +85,8 @@ import io.mosip.registration_client.api_services.MasterDataSyncApi;
@@ -35,21 +35,78 @@ index 27a9833..19504c3 100644
      private BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
          @Override
          public void onReceive(Context context, Intent intent) {
-@@ -420,6 +425,8 @@ public class MainActivity extends FlutterActivity {
+@@ -420,6 +425,9 @@ public class MainActivity extends FlutterActivity {
          GlobalConfigSettingsPigeon.GlobalConfigSettingsApi.setup(flutterEngine.getDartExecutor().getBinaryMessenger(), globalConfigSettingsApi);
          SecureScreenPigeon.SecureScreenApi.setup(flutterEngine.getDartExecutor().getBinaryMessenger(), secureScreenApi);
          secureScreenApi.setCallbackActivity(this);
 +        LivenessPigeon.LivenessApi.setup(flutterEngine.getDartExecutor().getBinaryMessenger(), livenessApi);
 +        livenessApi.attach(getApplicationContext(), flutterEngine.getDartExecutor().getBinaryMessenger());
++        biometricsDetailsApi.setLivenessApi(livenessApi);
      }
  
      @Override
+diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
+index e891b87..65903cb 100644
+--- a/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
++++ b/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
+@@ -126,6 +126,38 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+         this.userOnboardService = userOnboardService;
+     }
+ 
++    private LivenessApi livenessApi;
++
++    public void setLivenessApi(LivenessApi api) {
++        this.livenessApi = api;
++    }
++
++    /**
++     * SAJEEV #54: a face is stored only if a live session exists and the captured face is bound to it. Fails closed:
++     * no liveness bridge, no decodable image, no live verdict or a failed binding all refuse. Other modalities pass.
++     */
++    private boolean livenessAllowsStoring(List<BiometricsDto> dtos) {
++        if (currentModality != Modality.FACE) {
++            return true;
++        }
++        try {
++            if (livenessApi == null || dtos == null || dtos.isEmpty()) {
++                return false;
++            }
++            BiometricsDto face = dtos.get(0);
++            ByteArrayInputStream bais = new ByteArrayInputStream(CryptoUtil.base64decoder.decode(face.getBioValue()));
++            FaceBDIR bdir = new FaceBDIR(new DataInputStream(bais));
++            byte[] jp2 = bdir.getRepresentation().getRepresentationData().getImageData().getImage();
++            Bitmap bmp = new JP2Decoder(jp2).decode();
++            ByteArrayOutputStream png = new ByteArrayOutputStream();
++            bmp.compress(Bitmap.CompressFormat.PNG, 100, png);
++            return livenessApi.consumeLiveAndBind(png.toByteArray(), 30000);
++        } catch (Exception e) {
++            Log.e(TAG, "Liveness check of the captured face failed: refusing to store it", e);
++            return false;
++        }
++    }
++
+     public void setCallbackActivity(MainActivity mainActivity) {
+         this.activity = mainActivity;
+     }
+@@ -1101,6 +1133,12 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+                     return;
+                 }
+ 
++                if (!livenessAllowsStoring(biometricsDtoList)) {
++                    Toast.makeText(activity.getApplicationContext(),
++                            "Face liveness could not be verified. Please try again.", Toast.LENGTH_SHORT).show();
++                    biometricResult.error(new SecurityException("LIVENESS_REFUSED"));
++                    return;
++                }
+                 biometricsDtoList.forEach(dto -> {
+                     try {
+                         this.registrationService.getRegistrationDto().addBiometric(
 diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
 new file mode 100644
-index 0000000..af64dd6
+index 0000000..2cae9d4
 --- /dev/null
 +++ b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,123 @@
 +/*
 + * SAJEEV liveness bridge (ticket #52). Copyright (c) SAJEEV contributors. MPL-2.0.
 + */
@@ -80,6 +137,7 @@ index 0000000..af64dd6
 +    private final ExecutorService worker = Executors.newSingleThreadExecutor();
 +    private AndroidLivenessController controller;
 +    private LivenessPigeon.LivenessEvents events;
++    private final io.sajeev.session.LiveGate liveGate = new io.sajeev.session.LiveGate();
 +
 +    @Inject
 +    public LivenessApi() {
@@ -88,13 +146,17 @@ index 0000000..af64dd6
 +    /** Called from MainActivity once the Flutter engine exists. */
 +    public synchronized void attach(Context context, BinaryMessenger messenger) {
 +        events = new LivenessPigeon.LivenessEvents(messenger);
-+        controller = new AndroidLivenessController(context, SBI_PACKAGE, FEED_CLASS, (id, p) ->
-+                events.onProgress(id, toDto(p), new LivenessPigeon.LivenessEvents.Reply<Void>() {
-+                    @Override
-+                    public void reply(Void v) {
-+                        // fire and forget
-+                    }
-+                }));
++        controller = new AndroidLivenessController(context, SBI_PACKAGE, FEED_CLASS, (id, p) -> {
++            if ("LIVE".equals(p.phase)) {
++                liveGate.markLive(id);
++            }
++            events.onProgress(id, toDto(p), new LivenessPigeon.LivenessEvents.Reply<Void>() {
++                @Override
++                public void reply(Void v) {
++                    // fire and forget
++                }
++            });
++        });
 +    }
 +
 +    static LivenessPigeon.LivenessProgressDto toDto(AndroidLivenessController.Progress p) {
@@ -142,12 +204,183 @@ index 0000000..af64dd6
 +        controller().abort(sessionId);
 +    }
 +
++    /**
++     * The gate every resident face capture must pass before anything is stored. A LIVE verdict is used up by one capture,
++     * so one live check never covers a second capture. False when there is no live session, or the capture is not bound.
++     */
++    public boolean consumeLiveAndBind(byte[] capturedImage, long captureTimeoutMs) {
++        return liveGate.allowStore(id -> {
++            AndroidLivenessController c;
++            synchronized (this) {
++                c = controller;
++            }
++            if (c == null) {
++                return false;
++            }
++            boolean bound = c.checkCapture(id, capturedImage, captureTimeoutMs);
++            c.abort(id);
++            return bound;
++        });
++    }
++
 +    private synchronized AndroidLivenessController controller() {
 +        if (controller == null) {
 +            throw new IllegalStateException("liveness bridge not attached");
 +        }
 +        return controller;
 +    }
++}
+diff --git a/lib/liveness/liveness_gate.dart b/lib/liveness/liveness_gate.dart
+new file mode 100644
+index 0000000..5442403
+--- /dev/null
++++ b/lib/liveness/liveness_gate.dart
+@@ -0,0 +1,146 @@
++import 'dart:async';
++
++import 'package:flutter/material.dart';
++
++import 'package:registration_client/pigeon/liveness_pigeon.dart';
++
++import 'liveness_pane.dart';
++import 'liveness_states.g.dart';
++import 'liveness_texts.g.dart';
++import 'liveness_ui_state.dart';
++
++/// SAJEEV #54: liveness before the face capture. The Java side refuses to store a face that was not live and bound
++/// even if this gate is skipped; this gate is what the person sees (guidance, challenges, retries).
++/// Counts failed liveness attempts and says when the limit is reached (default 3, the PDF retry limit).
++class LivenessRetries {
++  final int max;
++  int _failures = 0;
++  LivenessRetries(this.max);
++  bool get exhausted => _failures >= max;
++  int get failures => _failures;
++  void failed() => _failures++;
++  void reset() => _failures = 0;
++}
++
++class LivenessGate {
++  static final LivenessRetries retries = LivenessRetries(3);
++
++  /// True when the capture may start. Non-face modalities pass through untouched.
++  static Future<bool> passIfFace(BuildContext context, String modality, {String workflow = 'RESIDENT'}) async {
++    if (modality.replaceAll(' ', '') != 'Face') return true;
++    final lang = _lang(context);
++    if (retries.exhausted) {
++      await _info(context, livenessTexts['failure.max_retries']![lang]!);
++      return false;
++    }
++    final result = await showDialog<String>(
++      context: context,
++      barrierDismissible: false,
++      builder: (_) => LivenessDialog(lang: lang, workflow: workflow),
++    );
++    if (result == 'LIVE') {
++      retries.reset();
++      return true;
++    }
++    if (result == 'NOT_LIVE') retries.failed();
++    return false;
++  }
++
++  static void resetAttempts() => retries.reset();
++
++  static String _lang(BuildContext c) {
++    final l = Localizations.localeOf(c).languageCode;
++    return (l == 'fr' || l == 'ar') ? l : 'en';
++  }
++
++  static Future<void> _info(BuildContext c, String text) =>
++      showDialog<void>(context: c, builder: (_) => AlertDialog(content: Text(text), actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))]));
++}
++
++class LivenessDialog extends StatefulWidget {
++  final String lang;
++  final String workflow;
++  const LivenessDialog({super.key, required this.lang, required this.workflow});
++
++  @override
++  State<LivenessDialog> createState() => _LivenessDialogState();
++}
++
++class _Events extends LivenessEvents {
++  final void Function(String, LivenessProgressDto) cb;
++  _Events(this.cb);
++  @override
++  void onProgress(String sessionId, LivenessProgressDto progress) => cb(sessionId, progress);
++}
++
++class _LivenessDialogState extends State<LivenessDialog> {
++  String? _id;
++  LivenessProgressDto? _p;
++  bool _closed = false;
++
++  @override
++  void initState() {
++    super.initState();
++    LivenessEvents.setup(_Events((id, p) {
++      if (id != _id && _id != null) return;
++      _update(p);
++    }));
++    LivenessApi().start(widget.workflow).then((id) {
++      _id = id;
++      LivenessApi().progress(id).then(_update);
++    }).catchError((_) {
++      _update(LivenessProgressDto(phase: 'UNAVAILABLE', guidanceKey: 'error.engine', reason: 'start_failed', mock: false, limited: false));
++    });
++  }
++
++  void _update(LivenessProgressDto p) {
++    if (!mounted || _closed) return;
++    setState(() => _p = p);
++    if (p.phase == 'LIVE') {
++      _closed = true;
++      Navigator.of(context).pop('LIVE');
++    }
++  }
++
++  @override
++  void dispose() {
++    LivenessEvents.setup(null);
++    if (_id != null && !_closed) LivenessApi().abort(_id!);
++    super.dispose();
++  }
++
++  Map<String, String> _t(String key) => livenessTexts[key] ?? {'en': key};
++
++  LivenessUiState _state() {
++    final p = _p;
++    final title = _t(widget.workflow == 'OPERATOR' ? 'ui.title.operator' : widget.workflow == 'SUPERVISOR' ? 'ui.title.supervisor' : 'ui.title.resident');
++    if (p == null || p.phase == 'RUNNING') {
++      final key = p?.challengeKey ?? p?.guidanceKey ?? 'passive.checking';
++      return LivenessUiState(id: 'RUN', title: title, badge: _t(p?.challengeKey != null ? 'ui.badge.challenge' : 'ui.badge.checking'),
++          badgeStyle: p?.challengeKey != null ? 'WARN' : 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0,
++          message: _t(key), hints: const [], buttons: const [], footer: const {});
++    }
++    final failed = p.phase == 'NOT_LIVE' || p.phase == 'LIMITED';
++    return LivenessUiState(id: p.phase, title: title, badge: _t(failed ? 'ui.badge.not_verified' : 'ui.badge.device_error'),
++        badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0,
++        message: _t(p.guidanceKey ?? 'failure.liveness'), hints: const [], buttons: [_t('ui.try_again')], footer: const {});
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final p = _p;
++    return Dialog(
++      insetPadding: const EdgeInsets.all(12),
++      child: LivenessPane(
++        state: _state(),
++        lang: widget.lang,
++        mock: p?.mock ?? false,
++        limited: p?.limited ?? false,
++        onButton: (_) {
++          _closed = true;
++          Navigator.of(context).pop(p?.phase ?? 'UNAVAILABLE');
++        },
++      ),
++    );
++  }
 +}
 diff --git a/lib/liveness/liveness_pane.dart b/lib/liveness/liveness_pane.dart
 new file mode 100644
@@ -353,6 +586,76 @@ index 0000000..435f195
 +  'INVALID_FRAME_DATA': LivenessUiState(id: 'INVALID_FRAME_DATA', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Device error. Please try again.', 'fr': 'Erreur de l\'appareil. Veuillez réessayer.', 'ar': 'خطأ في الجهاز. يرجى المحاولة مرة أخرى.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
 +  'ENGINE_ERROR': LivenessUiState(id: 'ENGINE_ERROR', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Stopped', 'fr': 'Arrêté', 'ar': 'متوقف', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Face verification unavailable', 'fr': 'Vérification du visage indisponible', 'ar': 'التحقق من الوجه غير متاح', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
 +};
+diff --git a/lib/liveness/liveness_texts.g.dart b/lib/liveness/liveness_texts.g.dart
+new file mode 100644
+index 0000000..7bf7f5b
+--- /dev/null
++++ b/lib/liveness/liveness_texts.g.dart
+@@ -0,0 +1,64 @@
++// GENERATED by ExportStatesDart (ticket #54). Do not edit by hand.
++const Map<String, Map<String, String>> livenessTexts = {
++  'challenge.blink': {'en': 'Please blink', 'fr': 'Veuillez cligner des yeux', 'ar': 'يرجى رمش عينيك', },
++  'challenge.eyes_closed_hold': {'en': 'Please close your eyes and hold', 'fr': 'Veuillez fermer les yeux et les garder fermés', 'ar': 'يرجى إغلاق عينيك والاستمرار', },
++  'challenge.look_down': {'en': 'Please look down', 'fr': 'Veuillez regarder vers le bas', 'ar': 'يرجى النظر إلى الأسفل', },
++  'challenge.look_left': {'en': 'Please look to the left', 'fr': 'Veuillez regarder à gauche', 'ar': 'يرجى النظر إلى اليسار', },
++  'challenge.look_right': {'en': 'Please look to the right', 'fr': 'Veuillez regarder à droite', 'ar': 'يرجى النظر إلى اليمين', },
++  'challenge.look_up': {'en': 'Please look up', 'fr': 'Veuillez regarder vers le haut', 'ar': 'يرجى النظر إلى الأعلى', },
++  'challenge.open_mouth': {'en': 'Please open your mouth', 'fr': 'Veuillez ouvrir la bouche', 'ar': 'يرجى فتح فمك', },
++  'challenge.smile': {'en': 'Please smile', 'fr': 'Veuillez sourire', 'ar': 'يرجى الابتسام', },
++  'challenge.turn_left': {'en': 'Please turn your head to the left', 'fr': 'Veuillez tourner la tête vers la gauche', 'ar': 'يرجى تحريك رأسك نحو اليسار', },
++  'challenge.turn_right': {'en': 'Please turn your head to the right', 'fr': 'Veuillez tourner la tête vers la droite', 'ar': 'يرجى تحريك رأسك نحو اليمين', },
++  'error.active_required': {'en': 'We could not verify face liveness. Please try again.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.', },
++  'error.camera_unavailable': {'en': 'Camera not available', 'fr': 'Caméra non disponible', 'ar': 'الكاميرا غير متاحة', },
++  'error.challenge_failed': {'en': 'We could not verify face liveness. Please try again. Follow the prompted action.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer. Suivez l\'action demandée.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى. اتبع الحركة المطلوبة.', },
++  'error.challenge_timeout': {'en': 'We could not verify face liveness. Please try again. Respond within the time shown.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer. Répondez dans le délai indiqué.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى. استجب خلال الوقت المحدد.', },
++  'error.device_disconnected': {'en': 'Device connection lost. Please reconnect.', 'fr': 'Connexion à l\'appareil perdue. Veuillez le reconnecter.', 'ar': 'انقطع الاتصال بالجهاز. يرجى إعادة التوصيل.', },
++  'error.device_unavailable': {'en': 'No camera device found', 'fr': 'Aucun appareil photo trouvé', 'ar': 'لم يتم العثور على جهاز كاميرا', },
++  'error.engine': {'en': 'Face verification unavailable', 'fr': 'Vérification du visage indisponible', 'ar': 'التحقق من الوجه غير متاح', },
++  'error.face_not_detected': {'en': 'Keep your face within the capture area', 'fr': 'Gardez votre visage dans la zone de capture', 'ar': 'أبقِ وجهك داخل منطقة الالتقاط', },
++  'error.invalid_frame': {'en': 'Device error. Please try again.', 'fr': 'Erreur de l\'appareil. Veuillez réessayer.', 'ar': 'خطأ في الجهاز. يرجى المحاولة مرة أخرى.', },
++  'error.multiple_faces': {'en': 'Only one person should be in view', 'fr': 'Une seule personne doit être dans le champ', 'ar': 'يجب أن يكون شخص واحد فقط في الإطار', },
++  'error.poor_quality_blurry': {'en': 'Hold still and keep the camera in focus', 'fr': 'Restez immobile et faites la mise au point', 'ar': 'ابقَ ثابتاً وركّز الكاميرا', },
++  'error.poor_quality_dark': {'en': 'Improve lighting', 'fr': 'Améliorez l\'éclairage', 'ar': 'حسّن الإضاءة', },
++  'error.poor_quality_small': {'en': 'Move closer to the camera', 'fr': 'Approchez-vous de la caméra', 'ar': 'اقترب من الكاميرا', },
++  'failure.liveness': {'en': 'We could not verify face liveness. Please try again.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.', },
++  'failure.max_retries': {'en': 'Face verification could not be completed. Please follow the recovery process.', 'fr': 'La vérification du visage n\'a pas pu être effectuée. Veuillez suivre la procédure de récupération.', 'ar': 'تعذّر إكمال التحقق من الوجه أو التقاطه. يرجى اتباع إجراء الاسترداد.', },
++  'failure.pad': {'en': 'Face verification could not be completed. Please try again.', 'fr': 'La vérification du visage n\'a pas pu être effectuée. Veuillez réessayer.', 'ar': 'تعذّر إكمال التحقق من الوجه. يرجى المحاولة مرة أخرى.', },
++  'feedback.action_detected': {'en': 'Action detected', 'fr': 'Action détectée', 'ar': 'تم رصد الحركة', },
++  'feedback.captured': {'en': 'Good, face captured successfully', 'fr': 'Bien, visage capturé avec succès', 'ar': 'جيد، تم التقاط الوجه بنجاح', },
++  'feedback.continue': {'en': 'Please continue', 'fr': 'Veuillez continuer', 'ar': 'يرجى المتابعة', },
++  'feedback.hold_still': {'en': 'Hold still', 'fr': 'Restez immobile', 'ar': 'ابقَ ثابتاً', },
++  'hint.capture_area': {'en': 'Keep your face within the capture area.', 'fr': 'Gardez votre visage dans la zone de capture.', 'ar': 'أبقِ وجهك داخل منطقة الالتقاط.', },
++  'hint.face_visible': {'en': 'Ensure your face is clearly visible.', 'fr': 'Assurez-vous que votre visage est bien visible.', 'ar': 'تأكد من أن وجهك مرئي بوضوح.', },
++  'hint.follow_prompt': {'en': 'Follow the prompted action.', 'fr': 'Suivez l\'action demandée.', 'ar': 'اتبع الحركة المطلوبة.', },
++  'hint.lighting': {'en': 'Improve lighting.', 'fr': 'Améliorez l\'éclairage.', 'ar': 'حسّن الإضاءة.', },
++  'hint.look_camera': {'en': 'Look directly at the camera.', 'fr': 'Regardez directement la caméra.', 'ar': 'انظر مباشرة إلى الكاميرا.', },
++  'passive.checking': {'en': 'Checking face liveness…', 'fr': 'Vérification de la vivacité du visage…', 'ar': 'جارٍ التحقق من حيوية الوجه…', },
++  'spoken.challenge.blink': {'en': 'Please blink', 'fr': 'Veuillez cligner des yeux', 'ar': 'يرجى رمش عينيك', },
++  'spoken.challenge.eyes_closed_hold': {'en': 'Please close your eyes and hold', 'fr': 'Veuillez fermer les yeux et les garder fermés', 'ar': 'يرجى إغلاق عينيك والاستمرار', },
++  'spoken.challenge.look_down': {'en': 'Please look down', 'fr': 'Veuillez regarder vers le bas', 'ar': 'يرجى النظر إلى الأسفل', },
++  'spoken.challenge.look_left': {'en': 'Please look to the left', 'fr': 'Veuillez regarder à gauche', 'ar': 'يرجى النظر إلى اليسار', },
++  'spoken.challenge.look_right': {'en': 'Please look to the right', 'fr': 'Veuillez regarder à droite', 'ar': 'يرجى النظر إلى اليمين', },
++  'spoken.challenge.look_up': {'en': 'Please look up', 'fr': 'Veuillez regarder vers le haut', 'ar': 'يرجى النظر إلى الأعلى', },
++  'spoken.challenge.open_mouth': {'en': 'Please open your mouth', 'fr': 'Veuillez ouvrir la bouche', 'ar': 'يرجى فتح فمك', },
++  'spoken.challenge.smile': {'en': 'Please smile', 'fr': 'Veuillez sourire', 'ar': 'يرجى الابتسام', },
++  'spoken.challenge.turn_left': {'en': 'Please turn your head to the left', 'fr': 'Veuillez tourner la tête vers la gauche', 'ar': 'يرجى تحريك رأسك نحو اليسار', },
++  'spoken.challenge.turn_right': {'en': 'Please turn your head to the right', 'fr': 'Veuillez tourner la tête vers la droite', 'ar': 'يرجى تحريك رأسك نحو اليمين', },
++  'ui.attempt': {'en': 'Attempt {0} of {1}', 'fr': 'Essai {0} sur {1}', 'ar': 'المحاولة {0} من {1}', },
++  'ui.badge.challenge': {'en': 'Challenge', 'fr': 'Défi', 'ar': 'تحدٍّ', },
++  'ui.badge.checking': {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', },
++  'ui.badge.device_error': {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', },
++  'ui.badge.not_verified': {'en': 'Not verified', 'fr': 'Non vérifié', 'ar': 'لم يتم التحقق', },
++  'ui.badge.retry': {'en': 'Retry available', 'fr': 'Nouvel essai possible', 'ar': 'يمكن إعادة المحاولة', },
++  'ui.badge.stopped': {'en': 'Stopped', 'fr': 'Arrêté', 'ar': 'متوقف', },
++  'ui.badge.verified': {'en': 'Verified', 'fr': 'Vérifié', 'ar': 'تم التحقق', },
++  'ui.offline': {'en': 'Offline: last synced configuration in use', 'fr': 'Hors ligne : dernière configuration synchronisée utilisée', 'ar': 'غير متصل: يتم استخدام آخر إعدادات تمت مزامنتها', },
++  'ui.online': {'en': 'Online', 'fr': 'En ligne', 'ar': 'متصل', },
++  'ui.rescan': {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', },
++  'ui.title.operator': {'en': 'Operator authentication', 'fr': 'Authentification de l\'opérateur', 'ar': 'مصادقة المشغّل', },
++  'ui.title.resident': {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', },
++  'ui.title.supervisor': {'en': 'Supervisor authentication', 'fr': 'Authentification du superviseur', 'ar': 'مصادقة المشرف', },
++  'ui.try_again': {'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', },
++};
 diff --git a/lib/liveness/liveness_ui_state.dart b/lib/liveness/liveness_ui_state.dart
 new file mode 100644
 index 0000000..dd95d18
@@ -390,6 +693,54 @@ index 0000000..dd95d18
 +    required this.footer,
 +  });
 +}
+diff --git a/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart b/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart
+index cb799d7..33745eb 100644
+--- a/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart
++++ b/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart
+@@ -7,6 +7,7 @@
+ 
+ import 'dart:convert';
+ 
++import 'package:registration_client/liveness/liveness_gate.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_screenutil/flutter_screenutil.dart';
+@@ -190,6 +191,7 @@ class _BiometricScanMiddleBlockState extends State<BiometricScanMiddleBlock> {
+                       onPressed: () async {
+                         if (widget.biometricAttributeData.attemptNo <
+                             widget.biometricAttributeData.noOfCapturesAllowed) {
++                          if (!await LivenessGate.passIfFace(context, widget.parameterTitle)) return;
+                           await BiometricsApi().invokeDiscoverSbi(
+                               widget.field.id!, widget.parameterTitle);
+                           await BiometricsApi()
+@@ -295,6 +297,7 @@ class _BiometricScanMiddleBlockState extends State<BiometricScanMiddleBlock> {
+                 if (widget.biometricAttributeData.attemptNo <
+                     widget.biometricAttributeData.noOfCapturesAllowed) {
+                   List<Uint8List?> temp = [];
++                  if (!await LivenessGate.passIfFace(context, widget.parameterTitle)) return;
+                   await BiometricsApi().invokeDiscoverSbi(
+                       widget.field.id!, widget.parameterTitle);
+                   await BiometricsApi()
+diff --git a/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart b/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
+index 7146ff4..d0060f1 100644
+--- a/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
++++ b/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
+@@ -15,6 +15,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
+ import 'package:flutter_svg/flutter_svg.dart';
+ import 'package:percent_indicator/linear_percent_indicator.dart';
+ import 'package:provider/provider.dart';
++import 'package:registration_client/liveness/liveness_gate.dart';
+ import 'package:registration_client/model/biometric_attribute_data.dart';
+ import 'package:registration_client/model/biometrics_dto.dart';
+ import 'package:registration_client/model/field.dart';
+@@ -597,6 +598,7 @@ class _BiometricCaptureScanBlockPortraitState
+               if (biometricAttributeData.attemptNo <
+                   biometricAttributeData.noOfCapturesAllowed) {
+                 List<Uint8List?> tempImageList = [];
++                if (!await LivenessGate.passIfFace(context, biometricAttributeData.title)) return;
+                 await BiometricsApi().invokeDiscoverSbi(widget.field.id!,
+                     biometricAttributeData.title.replaceAll(" ", ""));
+                 await BiometricsApi()
 diff --git a/pigeon.sh b/pigeon.sh
 index dea5aef..739c089 100644
 --- a/pigeon.sh
@@ -554,6 +905,30 @@ index 0000000..4591d78
 +      await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/${s.id.toLowerCase()}_ar.png'));
 +    });
 +  }
++}
+diff --git a/test/liveness/liveness_retries_test.dart b/test/liveness/liveness_retries_test.dart
+new file mode 100644
+index 0000000..19d3658
+--- /dev/null
++++ b/test/liveness/liveness_retries_test.dart
+@@ -0,0 +1,18 @@
++// SAJEEV #54
++import 'package:flutter_test/flutter_test.dart';
++import 'package:registration_client/liveness/liveness_gate.dart';
++
++void main() {
++  test('test_android_retry_limit_enforced', () {
++    final r = LivenessRetries(3);
++    expect(r.exhausted, false);
++    r.failed();
++    r.failed();
++    expect(r.exhausted, false);
++    r.failed();
++    expect(r.exhausted, true);
++    r.reset();
++    expect(r.exhausted, false);
++    expect(LivenessGate.retries.max, 3);
++  });
 +}
 diff --git a/test/liveness_events_test.dart b/test/liveness_events_test.dart
 new file mode 100644
