@@ -149,6 +149,247 @@ index 0000000..af64dd6
 +        return controller;
 +    }
 +}
+diff --git a/lib/liveness/liveness_pane.dart b/lib/liveness/liveness_pane.dart
+new file mode 100644
+index 0000000..b8b36f4
+--- /dev/null
++++ b/lib/liveness/liveness_pane.dart
+@@ -0,0 +1,156 @@
++import 'package:flutter/material.dart';
++import 'package:flutter/semantics.dart';
++
++import 'liveness_ui_state.dart';
++
++/// The liveness screen for Android (SAJEEV #53). Same states and wording as the desktop pane.
++/// Right-to-left for Arabic, readable at large text sizes, every element has a text label for TalkBack.
++class LivenessPane extends StatelessWidget {
++  final LivenessUiState state;
++  final String lang; // 'en', 'fr' or 'ar'
++  final Widget? preview; // the camera picture; a placeholder oval is drawn when null
++  final bool mock; // show the MOCK DEVICE label
++  final bool limited; // show the LIMITED label: capture-only check, not full liveness
++  final void Function(int index)? onButton;
++
++  const LivenessPane({
++    super.key,
++    required this.state,
++    required this.lang,
++    this.preview,
++    this.mock = false,
++    this.limited = false,
++    this.onButton,
++  });
++
++  Color _badgeColor(BuildContext c) {
++    switch (state.badgeStyle) {
++      case 'BAD':
++        return const Color(0xFFB3261E);
++      case 'WARN':
++        return const Color(0xFF8A5A00);
++      case 'OK':
++        return const Color(0xFF1B6E3A);
++      default:
++        return const Color(0xFF1F4FA3);
++    }
++  }
++
++  String _t(Map<String, String> m) => m[lang] ?? m['en'] ?? '';
++
++  @override
++  Widget build(BuildContext context) {
++    final rtl = lang == 'ar';
++    final badgeColor = _badgeColor(context);
++    return Directionality(
++      textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
++      child: Container(
++        color: Colors.white,
++        padding: const EdgeInsets.all(16),
++        child: SingleChildScrollView(
++          child: Column(
++            crossAxisAlignment: CrossAxisAlignment.stretch,
++            children: [
++              Semantics(
++                header: true,
++                child: Text(_t(state.title),
++                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF111111))),
++              ),
++              const SizedBox(height: 8),
++              Row(children: [
++                Semantics(
++                  label: _t(state.badge),
++                  child: Container(
++                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
++                    decoration: BoxDecoration(
++                        color: badgeColor, borderRadius: BorderRadius.circular(16)),
++                    child: Text(_t(state.badge),
++                        style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
++                  ),
++                ),
++                if (mock) ...[
++                  const SizedBox(width: 8),
++                  _tag('MOCK DEVICE'),
++                ],
++                if (limited) ...[
++                  const SizedBox(width: 8),
++                  _tag('LIMITED CHECK'),
++                ],
++              ]),
++              const SizedBox(height: 12),
++              if (state.showGuide)
++                AspectRatio(
++                  aspectRatio: 3 / 4,
++                  child: Semantics(
++                    label: _t(state.message),
++                    child: preview ?? CustomPaint(painter: _OvalPainter(badgeColor), child: Center(child: _icon())),
++                  ),
++                ),
++              const SizedBox(height: 12),
++              Semantics(
++                liveRegion: true,
++                child: Text(_t(state.message),
++                    textAlign: TextAlign.center,
++                    style: const TextStyle(fontSize: 20, color: Color(0xFF111111))),
++              ),
++              if (state.progressTotal > 0) ...[
++                const SizedBox(height: 12),
++                Semantics(
++                  label: '${state.progressDone} / ${state.progressTotal}',
++                  child: LinearProgressIndicator(
++                      value: state.progressDone / state.progressTotal, minHeight: 8, color: badgeColor),
++                ),
++                Center(child: Text('${state.progressDone} / ${state.progressTotal}', style: const TextStyle(fontSize: 14))),
++              ],
++              for (final h in state.hints)
++                Padding(
++                    padding: const EdgeInsets.only(top: 6),
++                    child: Text('• ${_t(h)}', style: const TextStyle(fontSize: 16, color: Color(0xFF333333)))),
++              const SizedBox(height: 12),
++              for (var i = 0; i < state.buttons.length; i++)
++                Padding(
++                  padding: const EdgeInsets.only(bottom: 8),
++                  child: ElevatedButton(
++                      onPressed: onButton == null ? null : () => onButton!(i),
++                      child: Text(_t(state.buttons[i]))),
++                ),
++              if (_t(state.footer).isNotEmpty)
++                Padding(
++                    padding: const EdgeInsets.only(top: 8),
++                    child: Text(_t(state.footer),
++                        textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Color(0xFF444444)))),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
++
++  Widget _icon() => state.icon.isEmpty
++      ? const SizedBox.shrink()
++      : ExcludeSemantics(child: Text(state.icon, style: const TextStyle(fontSize: 64, color: Color(0xFF1F4FA3))));
++
++  Widget _tag(String s) => Container(
++        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
++        decoration: BoxDecoration(border: Border.all(color: const Color(0xFF444444)), borderRadius: BorderRadius.circular(4)),
++        child: Text(s, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
++      );
++}
++
++class _OvalPainter extends CustomPainter {
++  final Color color;
++  _OvalPainter(this.color);
++
++  @override
++  void paint(Canvas canvas, Size size) {
++    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFEFEFEF));
++    final rect = Rect.fromCenter(center: size.center(Offset.zero), width: size.width * 0.62, height: size.height * 0.72);
++    canvas.drawOval(rect, Paint()
++      ..style = PaintingStyle.stroke
++      ..strokeWidth = 5
++      ..color = color);
++  }
++
++  @override
++  bool shouldRepaint(covariant _OvalPainter old) => old.color != color;
++}
+diff --git a/lib/liveness/liveness_states.g.dart b/lib/liveness/liveness_states.g.dart
+new file mode 100644
+index 0000000..435f195
+--- /dev/null
++++ b/lib/liveness/liveness_states.g.dart
+@@ -0,0 +1,36 @@
++// GENERATED by sajeev desktop-ui ExportStatesDart (ticket #53). Do not edit by hand.
++// Same states and wording as the desktop screens UX1-UX14. French and Arabic are unreviewed translations.
++import 'liveness_ui_state.dart';
++
++const List<LivenessUiState> livenessUxStates = [
++  LivenessUiState(id: 'UX1', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Checking face liveness…', 'fr': 'Vérification de la vivacité du visage…', 'ar': 'جارٍ التحقق من حيوية الوجه…', }, hints: [{'en': 'Keep your face within the capture area.', 'fr': 'Gardez votre visage dans la zone de capture.', 'ar': 'أبقِ وجهك داخل منطقة الالتقاط.', }, ], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX2', title: {'en': 'Operator authentication', 'fr': 'Authentification de l\'opérateur', 'ar': 'مصادقة المشغّل', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Checking face liveness…', 'fr': 'Vérification de la vivacité du visage…', 'ar': 'جارٍ التحقق من حيوية الوجه…', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX3', title: {'en': 'Supervisor authentication', 'fr': 'Authentification du superviseur', 'ar': 'مصادقة المشرف', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Checking face liveness…', 'fr': 'Vérification de la vivacité du visage…', 'ar': 'جارٍ التحقق من حيوية الوجه…', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX4', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Keep your face within the capture area', 'fr': 'Gardez votre visage dans la zone de capture', 'ar': 'أبقِ وجهك داخل منطقة الالتقاط', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX5', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Checking face liveness…', 'fr': 'Vérification de la vivacité du visage…', 'ar': 'جارٍ التحقق من حيوية الوجه…', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX6', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Challenge', 'fr': 'Défi', 'ar': 'تحدٍّ', }, badgeStyle: 'WARN', showGuide: true, icon: '←', progressDone: 0, progressTotal: 3, message: {'en': 'Please turn your head to the left', 'fr': 'Veuillez tourner la tête vers la gauche', 'ar': 'يرجى تحريك رأسك نحو اليسار', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX7', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Challenge', 'fr': 'Défi', 'ar': 'تحدٍّ', }, badgeStyle: 'WARN', showGuide: true, icon: '◎', progressDone: 0, progressTotal: 3, message: {'en': 'Please blink', 'fr': 'Veuillez cligner des yeux', 'ar': 'يرجى رمش عينيك', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX8', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Challenge', 'fr': 'Défi', 'ar': 'تحدٍّ', }, badgeStyle: 'WARN', showGuide: true, icon: '☺', progressDone: 2, progressTotal: 3, message: {'en': 'Please smile', 'fr': 'Veuillez sourire', 'ar': 'يرجى الابتسام', }, hints: [{'en': 'Please continue', 'fr': 'Veuillez continuer', 'ar': 'يرجى المتابعة', }, ], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX9', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Not verified', 'fr': 'Non vérifié', 'ar': 'لم يتم التحقق', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'We could not verify face liveness. Please try again.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.', }, hints: [{'en': 'Look directly at the camera.', 'fr': 'Regardez directement la caméra.', 'ar': 'انظر مباشرة إلى الكاميرا.', }, {'en': 'Ensure your face is clearly visible.', 'fr': 'Assurez-vous que votre visage est bien visible.', 'ar': 'تأكد من أن وجهك مرئي بوضوح.', }, {'en': 'Improve lighting.', 'fr': 'Améliorez l\'éclairage.', 'ar': 'حسّن الإضاءة.', }, {'en': 'Keep your face within the capture area.', 'fr': 'Gardez votre visage dans la zone de capture.', 'ar': 'أبقِ وجهك داخل منطقة الالتقاط.', }, {'en': 'Follow the prompted action.', 'fr': 'Suivez l\'action demandée.', 'ar': 'اتبع الحركة المطلوبة.', }, ], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX10', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Not verified', 'fr': 'Non vérifié', 'ar': 'لم يتم التحقق', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Face verification could not be completed. Please try again.', 'fr': 'La vérification du visage n\'a pas pu être effectuée. Veuillez réessayer.', 'ar': 'تعذّر إكمال التحقق من الوجه. يرجى المحاولة مرة أخرى.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX11', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Retry available', 'fr': 'Nouvel essai possible', 'ar': 'يمكن إعادة المحاولة', }, badgeStyle: 'WARN', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'We could not verify face liveness. Please try again.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, ], footer: {'en': 'Attempt {0} of {1}', 'fr': 'Essai {0} sur {1}', 'ar': 'المحاولة {0} من {1}', }),
++  LivenessUiState(id: 'UX12', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Stopped', 'fr': 'Arrêté', 'ar': 'متوقف', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Face verification could not be completed. Please follow the recovery process.', 'fr': 'La vérification du visage n\'a pas pu être effectuée. Veuillez suivre la procédure de récupération.', 'ar': 'تعذّر إكمال التحقق من الوجه أو التقاطه. يرجى اتباع إجراء الاسترداد.', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX13', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Device connection lost. Please reconnect.', 'fr': 'Connexion à l\'appareil perdue. Veuillez le reconnecter.', 'ar': 'انقطع الاتصال بالجهاز. يرجى إعادة التوصيل.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  LivenessUiState(id: 'UX14', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Checking face liveness…', 'fr': 'Vérification de la vivacité du visage…', 'ar': 'جارٍ التحقق من حيوية الوجه…', }, hints: [], buttons: [], footer: {'en': 'Offline: last synced configuration in use', 'fr': 'Hors ligne : dernière configuration synchronisée utilisée', 'ar': 'غير متصل: يتم استخدام آخر إعدادات تمت مزامنتها', }),
++];
++
++const Map<String, LivenessUiState> livenessErrorStates = {
++  'DEVICE_UNAVAILABLE': LivenessUiState(id: 'DEVICE_UNAVAILABLE', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'No camera device found', 'fr': 'Aucun appareil photo trouvé', 'ar': 'لم يتم العثور على جهاز كاميرا', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'DEVICE_DISCONNECTED': LivenessUiState(id: 'DEVICE_DISCONNECTED', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Device connection lost. Please reconnect.', 'fr': 'Connexion à l\'appareil perdue. Veuillez le reconnecter.', 'ar': 'انقطع الاتصال بالجهاز. يرجى إعادة التوصيل.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'CAMERA_UNAVAILABLE': LivenessUiState(id: 'CAMERA_UNAVAILABLE', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Camera not available', 'fr': 'Caméra non disponible', 'ar': 'الكاميرا غير متاحة', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'FACE_NOT_DETECTED': LivenessUiState(id: 'FACE_NOT_DETECTED', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Keep your face within the capture area', 'fr': 'Gardez votre visage dans la zone de capture', 'ar': 'أبقِ وجهك داخل منطقة الالتقاط', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'MULTIPLE_FACES': LivenessUiState(id: 'MULTIPLE_FACES', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Only one person should be in view', 'fr': 'Une seule personne doit être dans le champ', 'ar': 'يجب أن يكون شخص واحد فقط في الإطار', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'POOR_QUALITY': LivenessUiState(id: 'POOR_QUALITY', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Improve lighting', 'fr': 'Améliorez l\'éclairage', 'ar': 'حسّن الإضاءة', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'ACTIVE_REQUIRED': LivenessUiState(id: 'ACTIVE_REQUIRED', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Checking', 'fr': 'Vérification', 'ar': 'جارٍ التحقق', }, badgeStyle: 'PRIMARY', showGuide: true, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'We could not verify face liveness. Please try again.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى.', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'PAD_FAIL': LivenessUiState(id: 'PAD_FAIL', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Not verified', 'fr': 'Non vérifié', 'ar': 'لم يتم التحقق', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Face verification could not be completed. Please try again.', 'fr': 'La vérification du visage n\'a pas pu être effectuée. Veuillez réessayer.', 'ar': 'تعذّر إكمال التحقق من الوجه. يرجى المحاولة مرة أخرى.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'CHALLENGE_FAILED': LivenessUiState(id: 'CHALLENGE_FAILED', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Not verified', 'fr': 'Non vérifié', 'ar': 'لم يتم التحقق', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'We could not verify face liveness. Please try again. Follow the prompted action.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer. Suivez l\'action demandée.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى. اتبع الحركة المطلوبة.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'CHALLENGE_TIMEOUT': LivenessUiState(id: 'CHALLENGE_TIMEOUT', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Not verified', 'fr': 'Non vérifié', 'ar': 'لم يتم التحقق', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'We could not verify face liveness. Please try again. Respond within the time shown.', 'fr': 'Nous n\'avons pas pu vérifier la vivacité du visage. Veuillez réessayer. Répondez dans le délai indiqué.', 'ar': 'لم نتمكن من التحقق من حيوية الوجه. يرجى المحاولة مرة أخرى. استجب خلال الوقت المحدد.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'MAX_RETRIES': LivenessUiState(id: 'MAX_RETRIES', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Stopped', 'fr': 'Arrêté', 'ar': 'متوقف', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Face verification could not be completed. Please follow the recovery process.', 'fr': 'La vérification du visage n\'a pas pu être effectuée. Veuillez suivre la procédure de récupération.', 'ar': 'تعذّر إكمال التحقق من الوجه أو التقاطه. يرجى اتباع إجراء الاسترداد.', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'INVALID_FRAME_DATA': LivenessUiState(id: 'INVALID_FRAME_DATA', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Device error', 'fr': 'Erreur de l\'appareil', 'ar': 'خطأ في الجهاز', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Device error. Please try again.', 'fr': 'Erreur de l\'appareil. Veuillez réessayer.', 'ar': 'خطأ في الجهاز. يرجى المحاولة مرة أخرى.', }, hints: [], buttons: [{'en': 'Try again', 'fr': 'Réessayer', 'ar': 'حاول مرة أخرى', }, {'en': 'Re-scan devices', 'fr': 'Rechercher à nouveau les appareils', 'ar': 'إعادة البحث عن الأجهزة', }, ], footer: {'en': '', 'fr': '', 'ar': '', }),
++  'ENGINE_ERROR': LivenessUiState(id: 'ENGINE_ERROR', title: {'en': 'Resident face capture', 'fr': 'Capture du visage du résident', 'ar': 'التقاط وجه المقيم', }, badge: {'en': 'Stopped', 'fr': 'Arrêté', 'ar': 'متوقف', }, badgeStyle: 'BAD', showGuide: false, icon: '', progressDone: 0, progressTotal: 0, message: {'en': 'Face verification unavailable', 'fr': 'Vérification du visage indisponible', 'ar': 'التحقق من الوجه غير متاح', }, hints: [], buttons: [], footer: {'en': '', 'fr': '', 'ar': '', }),
++};
+diff --git a/lib/liveness/liveness_ui_state.dart b/lib/liveness/liveness_ui_state.dart
+new file mode 100644
+index 0000000..dd95d18
+--- /dev/null
++++ b/lib/liveness/liveness_ui_state.dart
+@@ -0,0 +1,31 @@
++/// SAJEEV liveness screens (ticket #53): one screen state as data. All text is already in en, fr and ar.
++class LivenessUiState {
++  final String id;
++  final Map<String, String> title;
++  final Map<String, String> badge;
++  /// PRIMARY, WARN, BAD or OK. Colour is never the only signal: the badge always has a text label.
++  final String badgeStyle;
++  final bool showGuide;
++  final String icon;
++  final int progressDone;
++  final int progressTotal;
++  final Map<String, String> message;
++  final List<Map<String, String>> hints;
++  final List<Map<String, String>> buttons;
++  final Map<String, String> footer;
++
++  const LivenessUiState({
++    required this.id,
++    required this.title,
++    required this.badge,
++    required this.badgeStyle,
++    required this.showGuide,
++    required this.icon,
++    required this.progressDone,
++    required this.progressTotal,
++    required this.message,
++    required this.hints,
++    required this.buttons,
++    required this.footer,
++  });
++}
 diff --git a/pigeon.sh b/pigeon.sh
 index dea5aef..739c089 100644
 --- a/pigeon.sh
@@ -215,6 +456,104 @@ index 0000000..e470487
 +@FlutterApi()
 +abstract class LivenessEvents {
 +  void onProgress(String sessionId, LivenessProgressDto progress);
++}
+diff --git a/test/liveness/liveness_pane_test.dart b/test/liveness/liveness_pane_test.dart
+new file mode 100644
+index 0000000..4591d78
+--- /dev/null
++++ b/test/liveness/liveness_pane_test.dart
+@@ -0,0 +1,92 @@
++// SAJEEV #53: widget tests for every state and golden images for UX1-UX14 (saved to docs/UIUX/android/).
++import 'dart:io';
++
++import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:registration_client/liveness/liveness_pane.dart';
++import 'package:registration_client/liveness/liveness_states.g.dart';
++import 'package:registration_client/liveness/liveness_ui_state.dart';
++
++Future<void> _loadFonts() async {
++  Future<void> load(String family, String path) async {
++    final f = File(path);
++    if (!f.existsSync()) return;
++    final loader = FontLoader(family)..addFont(Future.value(ByteData.sublistView(f.readAsBytesSync())));
++    await loader.load();
++  }
++
++  const sdkFonts = String.fromEnvironment('FLUTTER_FONTS', defaultValue: '');
++  await load('Roboto', '$sdkFonts/Roboto-Regular.ttf');
++  await load('ArialUnicode', '/System/Library/Fonts/Supplemental/Arial Unicode.ttf');
++}
++
++Widget _host(LivenessUiState s, String lang, {double scale = 1.0}) => MaterialApp(
++      debugShowCheckedModeBanner: false,
++      theme: ThemeData(fontFamily: 'Roboto', fontFamilyFallback: const ['ArialUnicode']),
++      home: MediaQuery(
++        data: MediaQueryData(size: const Size(360, 780), textScaleFactor: scale),
++        child: Scaffold(body: SafeArea(child: LivenessPane(state: s, lang: lang, mock: true, onButton: (_) {}))),
++      ),
++    );
++
++void main() {
++  setUpAll(() async {
++    TestWidgetsFlutterBinding.ensureInitialized();
++    await _loadFonts();
++  });
++
++  testWidgets('test_every_error_state_renders_a_message', (t) async {
++    for (final lang in ['en', 'fr', 'ar']) {
++      for (final e in livenessErrorStates.entries) {
++        await t.pumpWidget(_host(e.value, lang));
++        final msg = e.value.message[lang] ?? '';
++        expect(msg.trim().isNotEmpty, true, reason: '${e.key} has no $lang message');
++        expect(find.text(msg), findsOneWidget, reason: '${e.key} / $lang did not show its message');
++      }
++    }
++    expect(livenessErrorStates.length, 13);
++  });
++
++  testWidgets('every UX state shows a badge text, not colour alone, in every language', (t) async {
++    for (final lang in ['en', 'fr', 'ar']) {
++      for (final s in livenessUxStates) {
++        await t.pumpWidget(_host(s, lang));
++        expect(find.text(s.badge[lang]!), findsOneWidget, reason: '${s.id}/$lang badge');
++      }
++    }
++  });
++
++  testWidgets('layout is right-to-left for Arabic and survives large text', (t) async {
++    await t.pumpWidget(_host(livenessUxStates[7], 'ar', scale: 2.0));
++    final dir = Directionality.of(t.element(find.byType(LinearProgressIndicator).first));
++    expect(dir, TextDirection.rtl);
++    expect(t.takeException(), isNull, reason: 'overflow at 200% text');
++  });
++
++  testWidgets('semantics: the message is a live region and the title is a header', (t) async {
++    final h = t.ensureSemantics();
++    await t.pumpWidget(_host(livenessUxStates[5], 'en'));
++    expect(find.bySemanticsLabel('Please turn your head to the left'), findsWidgets);
++    h.dispose();
++  });
++
++  for (var i = 0; i < livenessUxStates.length; i++) {
++    final s = livenessUxStates[i];
++    testWidgets('golden ${s.id} en', (t) async {
++      t.view.physicalSize = const Size(360, 780);
++      t.view.devicePixelRatio = 1.0;
++      await t.pumpWidget(RepaintBoundary(child: _host(s, 'en')));
++      await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/${s.id.toLowerCase()}_en.png'));
++    });
++  }
++  for (final id in ['UX1', 'UX6', 'UX9', 'UX12']) {
++    final s = livenessUxStates.firstWhere((x) => x.id == id);
++    testWidgets('golden $id ar', (t) async {
++      t.view.physicalSize = const Size(360, 780);
++      t.view.devicePixelRatio = 1.0;
++      await t.pumpWidget(RepaintBoundary(child: _host(s, 'ar')));
++      await expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/${s.id.toLowerCase()}_ar.png'));
++    });
++  }
 +}
 diff --git a/test/liveness_events_test.dart b/test/liveness_events_test.dart
 new file mode 100644
