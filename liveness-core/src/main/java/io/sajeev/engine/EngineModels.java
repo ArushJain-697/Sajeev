@@ -31,6 +31,19 @@ public final class EngineModels implements AutoCloseable {
         sface = new SfaceEmbedder(dir.resolve("sface/face_recognition_sface_2021dec.onnx"));
     }
 
+    /** @return the shared face detector (for adapters that run a single-image check) */
+    public YuNetDetector detector() {
+        return detector;
+    }
+
+    public io.sajeev.passive.texture.MiniFasNetModel minifasV2() {
+        return minifasV2;
+    }
+
+    public io.sajeev.passive.texture.MiniFasNetModel minifasV1se() {
+        return minifasV1se;
+    }
+
     @Override
     public void close() {
         detector.close();

@@ -3,8 +3,10 @@ plugins { id 'com.android.library' }
 android {
     compileSdkVersion 33
     namespace 'io.sajeev.engine.android'
+
     defaultConfig {
         minSdkVersion 26
+        testApplicationId 'io.sajeev.feedprobe' // the mock SBI's caller allow-list names this package (test tooling only)
         targetSdkVersion 30
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
