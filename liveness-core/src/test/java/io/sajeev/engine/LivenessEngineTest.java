@@ -170,4 +170,18 @@ class LivenessEngineTest {
             }
         }
     }
+
+    /**
+     * STAND-IN, not a recorded attack: a still photo of a face fed as video is what a printed photo held steady looks like
+     * to the engine (no motion, no challenge possible). Real P1-P6 clips come with the recordings (#59, #62).
+     */
+    @Test
+    void test_attack_P1_still_photo_standin_is_rejected_or_failure_is_reported() throws Exception {
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+        feed(s, file("one_face.jpg"), 60);
+        assertNotNull(s.verdict(), "no verdict for a held-still photo");
+        assertTrue(s.verdict().tier() != Verdict.Tier.LIVE_PASSIVE && s.verdict().tier() != Verdict.Tier.LIVE_ACTIVE,
+                "a still photo was accepted as live: " + s.verdict().tier());
+        s.abort();
+    }
 }
