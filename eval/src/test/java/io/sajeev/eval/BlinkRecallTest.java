@@ -13,8 +13,21 @@ import org.junit.jupiter.api.Test;
 
 class BlinkRecallTest {
 
+    /** Real traces when eval/blink/real/*.csv exist (the same input run_blink.sh uses), otherwise the synthetic ones. */
     private static List<BlinkRecall.Trace> traces() {
         List<BlinkRecall.Trace> t = new ArrayList<>();
+        java.io.File[] real = new java.io.File("blink/real").listFiles((d, n) -> n.endsWith(".csv"));
+        if (real != null && real.length > 0) {
+            java.util.Arrays.sort(real);
+            try {
+                for (java.io.File f : real) {
+                    t.add(BlinkRecall.fromCsv(f.toPath()));
+                }
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException(e);
+            }
+            return t;
+        }
         for (int d : new int[] {100, 150, 200, 250, 300, 400}) {
             t.add(BlinkRecall.synthetic(d));
         }
