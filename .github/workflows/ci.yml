@@ -1,5 +1,5 @@
-# #65: CI definition. NOT RUN YET (the repository was never pushed when this was written).
-# Model files are not in the repository; tests that need them skip when SAJEEV_MODELS is not set.
+# #65: CI definition. Model files are not in the repository: the build downloads them from the release (scripts/fetch_models.sh).
+# If the download is not available the model tests skip and the run says so.
 name: ci
 on: [push, pull_request]
 jobs:
@@ -9,8 +9,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17', cache: maven }
+      - name: Fetch the models
+        run: scripts/fetch_models.sh || echo "models not available: the tests that need them will skip"
       - name: Build and test (coverage report in each module's target/site/jacoco)
-        run: mvn -B -pl liveness-api,liveness-core,devices,bench,eval test
+        run: mvn -B -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=$PWD/liveness-models/models
       - name: Keep the coverage report
         uses: actions/upload-artifact@v4
         with: { name: jacoco, path: '**/target/site/jacoco' }

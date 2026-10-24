@@ -7,7 +7,6 @@ import android.os.Looper;
 import io.sajeev.api.ChallengeType;
 import io.sajeev.api.ErrorState;
 import io.sajeev.api.Frame;
-import io.sajeev.api.PolicyConfig;
 import io.sajeev.api.Verdict;
 import io.sajeev.api.Workflow;
 import io.sajeev.audit.AuditLog;
@@ -79,6 +78,7 @@ public final class AndroidLivenessController {
     private final Context context;
     private final String sbiPackage;
     private final String feedClass;
+    private final java.util.function.Supplier<Properties> settings;
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Map<String, Running> sessions = new ConcurrentHashMap<>();
@@ -91,6 +91,13 @@ public final class AndroidLivenessController {
      * @param listener progress receiver (main thread); may be null
      */
     public AndroidLivenessController(Context context, String sbiPackage, String feedClass, Listener listener) {
+        this(context, sbiPackage, feedClass, Properties::new, listener);
+    }
+
+    /** @param settings the client's liveness settings (mosip.registration.liveness.*), read when the engine is first needed */
+    public AndroidLivenessController(Context context, String sbiPackage, String feedClass,
+                                     java.util.function.Supplier<Properties> settings, Listener listener) {
+        this.settings = settings;
         this.context = context.getApplicationContext();
         this.sbiPackage = sbiPackage;
         this.feedClass = feedClass;
@@ -102,18 +109,31 @@ public final class AndroidLivenessController {
             AndroidImageDecoder.install();
             File models = new File(context.getFilesDir(), "models");
             // models load only after the signed manifest verifies (ECDSA, bundled trust root); an unsigned or changed model is refused
-            engine = new LivenessEngine(EngineModels.loadVerified(models.toPath(), EngineModels.bundledTrustRoot(), 0), Config.load(new Properties()),
+            engine = new LivenessEngine(EngineModels.loadVerified(models.toPath(), EngineModels.bundledTrustRoot(), 0), loadConfig(),
                     EngineSettings.defaults(), new AuditLog(System::currentTimeMillis), new LivenessMetrics());
         }
         return engine;
     }
 
     /** Starts a session. Fails closed: if the engine or the feed is missing, the session reports UNAVAILABLE for its whole life. */
+    /** A bad setting never switches liveness off: the defaults apply and the problem is logged. */
+    private Config loadConfig() throws Exception {
+        try {
+            return Config.load(settings.get());
+        } catch (Config.ConfigException | RuntimeException e) {
+            android.util.Log.e("Sajeev", "Invalid liveness configuration; using the defaults", e);
+            return Config.load(new Properties());
+        }
+    }
+
+    /** Longest a whole session may run (frames or no frames); a hung camera never leaves the person waiting for ever. */
+    static final long SESSION_DEADLINE_MILLIS = 45_000L;
+
     public String start(String workflow) {
         final String id = UUID.randomUUID().toString();
         EngineSession session;
         try {
-            session = engine().start(Workflow.valueOf(workflow), new PolicyConfig(0.80, 2, 3));
+            session = engine().start(Workflow.valueOf(workflow));
         } catch (Throwable t) {
             Running dead = new Running(null, null);
             dead.last = new Progress("UNAVAILABLE", null, GuidanceKeys.keyFor(ErrorState.ENGINE_ERROR), "engine_unavailable", false, false);
@@ -142,8 +162,16 @@ public final class AndroidLivenessController {
     }
 
     private void pump(String id, Running r) {
+        long deadline = System.nanoTime() + SESSION_DEADLINE_MILLIS * 1_000_000L;
         try {
             while (!r.stop) {
+                if (System.nanoTime() > deadline) {
+                    r.session.abort();
+                    r.last = new Progress("UNAVAILABLE", null, "error.engine", "session_deadline", false, false);
+                    publish(id, r);
+                    r.source.close();
+                    break;
+                }
                 Optional<Frame> f = r.source.next(100);
                 if (f.isPresent()) {
                     r.session.onFrame(f.get());

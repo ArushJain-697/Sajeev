@@ -1,5 +1,103 @@
+diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
+index ce97ad65..6575ee62 100644
+--- a/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
++++ b/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
+@@ -133,16 +133,30 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+ 
+     public void setLivenessApi(LivenessApi api) {
+         this.livenessApi = api;
++        api.useGlobalParams(globalParamRepository);
+     }
+ 
+     /**
+      * SAJEEV #54: a face is stored only if a live session exists and the captured face is bound to it. Fails closed:
+      * no liveness bridge, no decodable image, no live verdict or a failed binding all refuse. Other modalities pass.
+      */
++    /** The device capture timeout from the client's settings (30 s when it is not set), for Binding's time window. */
++    private long captureTimeoutMillis() {
++        try {
++            int t = globalParamRepository.getCachedIntCaptureTimeout();
++            return t > 0 ? t : 30000L;
++        } catch (RuntimeException e) {
++            return 30000L;
++        }
++    }
++
+     private boolean livenessAllowsStoring(List<BiometricsDto> dtos) {
+         if (currentModality != Modality.FACE) {
+             return true;
+         }
++        if (!new io.mosip.registration.clientmanager.util.LivenessSettings(globalParamRepository).enabled()) {
++            return true; // an administrator switched liveness off (mosip.registration.liveness.enabled=false)
++        }
+         try {
+             if (livenessApi == null || dtos == null || dtos.isEmpty()) {
+                 return false;
+@@ -154,7 +168,7 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+             Bitmap bmp = new JP2Decoder(jp2).decode();
+             ByteArrayOutputStream png = new ByteArrayOutputStream();
+             bmp.compress(Bitmap.CompressFormat.PNG, 100, png);
+-            return livenessApi.consumeLiveAndBind(png.toByteArray(), 30000);
++            return livenessApi.consumeLiveAndBind(png.toByteArray(), captureTimeoutMillis());
+         } catch (Exception e) {
+             Log.e(TAG, "Liveness check of the captured face failed: refusing to store it", e);
+             return false;
+diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
+index 2cae9d48..2f3b6143 100644
+--- a/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
++++ b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
+@@ -37,7 +37,7 @@ public class LivenessApi implements LivenessPigeon.LivenessApi {
+     /** Called from MainActivity once the Flutter engine exists. */
+     public synchronized void attach(Context context, BinaryMessenger messenger) {
+         events = new LivenessPigeon.LivenessEvents(messenger);
+-        controller = new AndroidLivenessController(context, SBI_PACKAGE, FEED_CLASS, (id, p) -> {
++        controller = new AndroidLivenessController(context, SBI_PACKAGE, FEED_CLASS, this::engineProperties, (id, p) -> {
+             if ("LIVE".equals(p.phase)) {
+                 liveGate.markLive(id);
+             }
+@@ -50,6 +50,40 @@ public class LivenessApi implements LivenessPigeon.LivenessApi {
+         });
+     }
+ 
++    private volatile io.mosip.registration.clientmanager.repository.GlobalParamRepository params;
++
++    /** The client's global parameters, so the engine follows the client's liveness settings (set by BiometricsDetailsApi). */
++    public void useGlobalParams(io.mosip.registration.clientmanager.repository.GlobalParamRepository repository) {
++        this.params = repository;
++    }
++
++    /** Every engine setting the client holds (mosip.registration.liveness.*, with .resident/.operator/.supervisor overrides). */
++    java.util.Properties engineProperties() {
++        java.util.Properties p = new java.util.Properties();
++        io.mosip.registration.clientmanager.repository.GlobalParamRepository r = params;
++        if (r == null) {
++            return p;
++        }
++        for (String key : io.sajeev.policy.Config.DEFAULTS.keySet()) {
++            put(p, r, key);
++            for (String w : io.sajeev.policy.Config.WORKFLOWS) {
++                put(p, r, key + "." + w);
++            }
++        }
++        return p;
++    }
++
++    private static void put(java.util.Properties p, io.mosip.registration.clientmanager.repository.GlobalParamRepository r, String suffix) {
++        try {
++            String v = r.getCachedStringGlobalParam(io.sajeev.policy.Config.PREFIX + suffix);
++            if (v != null && !v.trim().isEmpty()) {
++                p.setProperty(io.sajeev.policy.Config.PREFIX + suffix, v.trim());
++            }
++        } catch (RuntimeException ignored) {
++            // a missing parameter keeps the engine default
++        }
++    }
++
+     static LivenessPigeon.LivenessProgressDto toDto(AndroidLivenessController.Progress p) {
+         LivenessPigeon.LivenessProgressDto.Builder b = new LivenessPigeon.LivenessProgressDto.Builder();
+         b.setPhase(p.phase);
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
-index 921e4d4..57b60a4 100644
+index 921e4d4d..57b60a42 100644
 --- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
 +++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/constant/AuditEvent.java
 @@ -191,7 +191,17 @@ public enum AuditEvent {
@@ -22,7 +120,7 @@ index 921e4d4..57b60a4 100644
      AuditEvent(String id, String type, String name, String description) {
          this.id = id;
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
-index bec3131..39ac788 100644
+index bec31310..39ac788e 100644
 --- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
 +++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
 @@ -131,6 +131,24 @@ public class Biometrics095Service extends BiometricsService {
@@ -61,7 +159,7 @@ index bec3131..39ac788 100644
                      if (matchProvider == null) {
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
 new file mode 100644
-index 0000000..5056639
+index 00000000..5056639e
 --- /dev/null
 +++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
 @@ -0,0 +1,67 @@
@@ -133,7 +231,7 @@ index 0000000..5056639
 +    }
 +}
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java
-index 8f4063b..b918c4e 100644
+index 8f4063b8..b918c4ef 100644
 --- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java
 +++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/MatchUtil.java
 @@ -93,6 +93,27 @@ public class MatchUtil {
@@ -166,7 +264,7 @@ index 8f4063b..b918c4e 100644
       * {@link BiometricRecord array} respectively and calls the match method of Match-SDK library
 diff --git a/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
 new file mode 100644
-index 0000000..878a3b1
+index 00000000..878a3b1a
 --- /dev/null
 +++ b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
 @@ -0,0 +1,67 @@
@@ -238,7 +336,7 @@ index 0000000..878a3b1
 +    }
 +}
 diff --git a/assets/l10n/app_ar.arb b/assets/l10n/app_ar.arb
-index c3b216a..72fe460 100644
+index c3b216ae..72fe460a 100644
 --- a/assets/l10n/app_ar.arb
 +++ b/assets/l10n/app_ar.arb
 @@ -317,11 +317,11 @@
@@ -378,7 +476,7 @@ index c3b216a..72fe460 100644
  }
 -
 diff --git a/assets/l10n/app_en.arb b/assets/l10n/app_en.arb
-index 0012c53..3296392 100644
+index 0012c53a..32963920 100644
 --- a/assets/l10n/app_en.arb
 +++ b/assets/l10n/app_en.arb
 @@ -185,7 +185,7 @@
@@ -509,7 +607,7 @@ index 0012c53..3296392 100644
 +  "liveness_face_auth_hint": "No password? Leave it empty to authenticate with your face (if face authentication is enabled)."
  }
 diff --git a/assets/l10n/app_fr.arb b/assets/l10n/app_fr.arb
-index 4935d25..79bdb20 100644
+index 4935d257..79bdb206 100644
 --- a/assets/l10n/app_fr.arb
 +++ b/assets/l10n/app_fr.arb
 @@ -317,11 +317,11 @@
@@ -649,7 +747,7 @@ index 4935d25..79bdb20 100644
  }
 -
 diff --git a/assets/l10n/app_hi.arb b/assets/l10n/app_hi.arb
-index fc09a47..b2c3829 100644
+index fc09a47e..b2c38294 100644
 --- a/assets/l10n/app_hi.arb
 +++ b/assets/l10n/app_hi.arb
 @@ -316,13 +316,13 @@
@@ -791,7 +889,7 @@ index fc09a47..b2c3829 100644
 +  "liveness_face_auth_hint": "पासवर्ड नहीं है? चेहरे से प्रमाणित करने के लिए इसे खाली छोड़ें (यदि चेहरा प्रमाणीकरण सक्षम है)।"
  }
 diff --git a/assets/l10n/app_kn.arb b/assets/l10n/app_kn.arb
-index 29bc909..85d0f4b 100644
+index 29bc909f..85d0f4ba 100644
 --- a/assets/l10n/app_kn.arb
 +++ b/assets/l10n/app_kn.arb
 @@ -131,7 +131,7 @@
@@ -953,7 +1051,7 @@ index 29bc909..85d0f4b 100644
 +  "liveness_face_auth_hint": "ಪಾಸ್‌ವರ್ಡ್ ಇಲ್ಲವೇ? ನಿಮ್ಮ ಮುಖದಿಂದ ದೃಢೀಕರಿಸಲು ಇದನ್ನು ಖಾಲಿ ಬಿಡಿ (ಮುಖ ದೃಢೀಕರಣ ಸಕ್ರಿಯವಾಗಿದ್ದರೆ)."
  }
 diff --git a/assets/l10n/app_ta.arb b/assets/l10n/app_ta.arb
-index 12ecdf7..c4302b1 100644
+index 12ecdf7a..c4302b14 100644
 --- a/assets/l10n/app_ta.arb
 +++ b/assets/l10n/app_ta.arb
 @@ -70,7 +70,7 @@
@@ -1116,3 +1214,67 @@ index 12ecdf7..c4302b1 100644
 +  "liveness_auth_with_face": "முகத்தால் அங்கீகரிக்கவும்",
 +  "liveness_face_auth_hint": "கடவுச்சொல் இல்லையா? உங்கள் முகத்தால் அங்கீகரிக்க இதை காலியாக விடுங்கள் (முக அங்கீகாரம் இயக்கப்பட்டிருந்தால்)."
  }
+diff --git a/lib/liveness/liveness_gate.dart b/lib/liveness/liveness_gate.dart
+index 5f8c3a36..75f59ab3 100644
+--- a/lib/liveness/liveness_gate.dart
++++ b/lib/liveness/liveness_gate.dart
+@@ -3,9 +3,9 @@ import 'dart:async';
+ import 'package:flutter/material.dart';
+ 
+ import 'package:registration_client/pigeon/liveness_pigeon.dart';
++import 'package:registration_client/pigeon/process_spec_pigeon.dart';
+ 
+ import 'liveness_pane.dart';
+-import 'liveness_states.g.dart';
+ import 'liveness_texts.g.dart';
+ import 'liveness_ui_state.dart';
+ 
+@@ -23,11 +23,35 @@ class LivenessRetries {
+ }
+ 
+ class LivenessGate {
+-  static final LivenessRetries retries = LivenessRetries(3);
++  static LivenessRetries retries = LivenessRetries(3);
++  static const _enabledKey = 'mosip.registration.liveness.enabled';
++  static const _maxRetriesKey = 'mosip.registration.liveness.maxRetries';
++
++  /// The client's own settings (global parameters): liveness on unless exactly "false"; retries default 3, never below 1.
++  static Future<void> _loadSettings() async {
++    try {
++      final r = int.tryParse((await ProcessSpecApi().getStringValueGlobalParam(_maxRetriesKey)).trim());
++      final max = (r == null || r < 1) ? 3 : r;
++      if (max != retries.max) retries = LivenessRetries(max);
++    } catch (_) {
++      // keep the current limit
++    }
++  }
++
++  static Future<bool> _enabled() async {
++    try {
++      return (await ProcessSpecApi().getStringValueGlobalParam(_enabledKey)).trim().toLowerCase() != 'false';
++    } catch (_) {
++      return true; // a missing or unreadable setting never switches liveness off
++    }
++  }
+ 
+   /// True when the capture may start. Non-face modalities pass through untouched.
+   static Future<bool> passIfFace(BuildContext context, String modality, {String workflow = 'RESIDENT'}) async {
+     if (modality.replaceAll(' ', '') != 'Face') return true;
++    if (!await _enabled()) return true; // an administrator switched liveness off
++    await _loadSettings();
++    if (!context.mounted) return false;
+     final lang = _lang(context);
+     if (retries.exhausted) {
+       await _info(context, livenessTexts['failure.max_retries']![lang]!);
+diff --git a/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart b/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
+index d0060f1a..3df4f56b 100644
+--- a/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
++++ b/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
+@@ -54,6 +54,7 @@ class _BiometricCaptureScanBlockPortraitState
+     globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+ 
+     super.initState();
++    LivenessGate.resetAttempts(); // a new capture screen is a new attempt flow
+   }
+ 
+   setInitialState() {

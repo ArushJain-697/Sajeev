@@ -32,3 +32,8 @@ Run the patched MockMDS (from a Maven-packaged build copy): `java -Dsajeev.repla
 3. In each folder: `git remote add fork https://github.com/<your-user>/<repo>.git` then `git push fork <branch>`.
 4. In each fork, open a pull request from the branch into the fork's own default branch (the plan: PRs inside your own forks, not into MOSIP's repos).
 The desktop branch targets `release-1.2.0.x` (JDK 11); the Android branch needs `android/app/libs/sajeev-engine.aar` (built from `integrations/engine-android`).
+
+## Building the forks on a clean machine (the engine is a separate build)
+1. Engine for the desktop client: in this repository run `mvn -pl liveness-api,liveness-core -DskipTests install` (JDK 17 or 11, it compiles to Java 11). That puts `io.sajeev:liveness-api` and `io.sajeev:liveness-core` in your local Maven repository, which is where `registration-services/pom.xml` looks.
+2. Desktop client: `cd registration && mvn -Dgpg.skip=true install` with JDK 11 (the models are found through `-Dmosip.registration.liveness.model.dir=<models>`, see `liveness-models/README.md`).
+3. Engine for the Android client: `mvn -pl liveness-api,liveness-core -DskipTests package`, then `integrations/engine-android/prepare.sh` and `gradle :engine:assembleRelease` in `integrations/engine-android`; copy `engine/build/outputs/aar/engine-release.aar` to `android/app/libs/sajeev-engine.aar` in the Android fork (Flutter 3.10.x).

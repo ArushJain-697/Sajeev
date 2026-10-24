@@ -10,3 +10,4 @@ eval/clips/
 .jqwik-database
 eval/data/
 eval/blink/real/
+liveness-models/models/
