@@ -52,7 +52,7 @@ public final class Binding {
     private final int ringSize;
     private final boolean timingCheckEnabled;
     private final List<Observation> ring = new ArrayList<>();
-    private long liveVerdictNanos = -1;
+    private volatile long liveVerdictNanos = -1; // written by the session's worker, read by the caller's thread
 
     /**
      * @param embeddingThreshold cosine at or above which the embeddings match (0.363 is OpenCV's verification default,

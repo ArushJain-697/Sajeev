@@ -66,7 +66,7 @@ class EngineThroughDeviceTest {
             assertTrue(v.tier() != Verdict.Tier.LIVE_PASSIVE && v.tier() != Verdict.Tier.LIVE_ACTIVE, "a replayed photo was judged live");
             if (expect.equals("BELOW_FPS")) {
                 assertEquals(Verdict.Tier.CANNOT_JUDGE, v.tier());
-                assertEquals(ErrorState.DEVICE_UNAVAILABLE, v.error().get());
+                assertEquals(ErrorState.INVALID_FRAME_DATA, v.error().get());
             }
             s.abort();
         }

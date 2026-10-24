@@ -48,6 +48,21 @@ public final class LivenessEngine implements LivenessService, AutoCloseable {
         return new EngineSession(this, workflow, policy);
     }
 
+    /** Starts a session with the workflow's own policy from the configuration (what the clients use). */
+    public EngineSession start(Workflow workflow) {
+        return start(workflow, policyFor(workflow));
+    }
+
+    /**
+     * @param workflow resident, operator or supervisor
+     * @return threshold, minimum challenges and retries for this workflow, per-workflow overrides included
+     */
+    public PolicyConfig policyFor(Workflow workflow) {
+        String w = workflow.name().toLowerCase(java.util.Locale.ROOT);
+        return new PolicyConfig(Double.parseDouble(config.value("passive.threshold", w)),
+                Integer.parseInt(config.value("active.minChallenges", w)), Integer.parseInt(config.value("maxRetries", w)));
+    }
+
     @Override
     public void close() {
         workers.shutdownNow();

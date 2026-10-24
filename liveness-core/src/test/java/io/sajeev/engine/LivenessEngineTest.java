@@ -199,8 +199,30 @@ class LivenessEngineTest {
             Thread.sleep(50);
         }
         assertEquals(Verdict.Tier.CANNOT_JUDGE, s.verdict().tier());
-        assertEquals(ErrorState.DEVICE_UNAVAILABLE, s.verdict().error().get());
+        assertEquals(ErrorState.INVALID_FRAME_DATA, s.verdict().error().get());
         assertEquals("stream_below_min_fps", s.verdict().reason());
+    }
+
+    @Test
+    void test_a_stream_that_stops_ends_as_a_lost_device_not_a_wait_for_ever() throws Exception {
+        long before = settings.streamStallMillis;
+        settings.streamStallMillis = 1_000;
+        try {
+            io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+            byte[] jpeg = file("one_face.jpg");
+            for (int i = 0; i < 3; i++) { // fewer frames than the passive window, then nothing
+                s.onFrame(new Frame(jpeg, 1_000_000_000L + i * STEP, i));
+            }
+            long end = System.currentTimeMillis() + 10_000;
+            while (s.verdict() == null && System.currentTimeMillis() < end) {
+                Thread.sleep(50);
+            }
+            assertNotNull(s.verdict(), "the session waited for ever after the frames stopped");
+            assertEquals(ErrorState.DEVICE_DISCONNECTED, s.verdict().error().get());
+            assertEquals("stream_stalled", s.verdict().reason());
+        } finally {
+            settings.streamStallMillis = before;
+        }
     }
 
     // ---- STAND-INS for attack species (synthetic edits of the public-domain photo, NOT recorded attacks) ----

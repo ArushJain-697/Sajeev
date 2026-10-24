@@ -7,6 +7,8 @@ public final class EngineSettings {
     public int passiveFrames = 8;
     /** Time (in frame arrival time) without a decision before the session gives up with a guidance error. */
     public long passiveTimeoutMillis = 10_000;
+    /** Wall-clock time without any delivered frame (after the first one) before the session ends as a lost device. */
+    public long streamStallMillis = 5_000;
     /** The bounded frame queue; the oldest frame is dropped when it is full. */
     public int queueCapacity = 8;
     /** FaceTracker limits. */

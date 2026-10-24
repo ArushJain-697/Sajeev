@@ -100,6 +100,7 @@ public final class EngineSession implements LivenessSession {
     private double avgProcessingMs;
     private long processed;
     private final LoadShedder shedder = new LoadShedder(8);
+    private long lastFrameWallNanos = -1; // worker thread only
 
     private ChallengeSession challenge;
     private ActionDetectors.Baseline baseline;
@@ -318,8 +319,13 @@ public final class EngineSession implements LivenessSession {
             while (running && state != State.DONE && state != State.ABORTED) {
                 Frame f = queue.poll(50, TimeUnit.MILLISECONDS);
                 if (f == null) {
+                    if (lastFrameWallNanos > 0 && System.nanoTime() - lastFrameWallNanos > st.streamStallMillis * 1_000_000L) {
+                        // frames stopped (unplugged, crashed device): end the session instead of waiting for ever
+                        finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.DEVICE_DISCONNECTED, "stream_stalled");
+                    }
                     continue;
                 }
+                lastFrameWallNanos = System.nanoTime();
                 long t0 = System.nanoTime();
                 try {
                     if (st.testDelayMillis > 0) {
@@ -369,14 +375,15 @@ public final class EngineSession implements LivenessSession {
         arrivalsCount++;
         if (state == State.PASSIVE && arrivalsCount >= 5 && deliveredFps() < minFps) {
             // the PDF minimum (3 fps, config minFps) is not met: say so instead of judging a stream that is too slow
-            finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.DEVICE_UNAVAILABLE, "stream_below_min_fps");
+            // the device works but is too slow: "Device error", not "No camera device found"
+            finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.INVALID_FRAME_DATA, "stream_below_min_fps");
             return;
         }
         if (guard.flags().contains(FrameFlag.INVALID_FRAME_DATA) && img == null) {
             lastTrackerError = ErrorState.INVALID_FRAME_DATA;
         }
         if (img == null || !take) {
-            checkPassiveTimeout(f);
+            onUnusableFrame(f);
             return;
         }
         List<Detection> dets = analysis.faces(f);
@@ -385,7 +392,7 @@ public final class EngineSession implements LivenessSession {
         FaceTracker.State ts = tracker.assess(dets, q);
         if (ts.error().isPresent()) {
             lastTrackerError = ts.error().get();
-            checkPassiveTimeout(f);
+            onUnusableFrame(f);
             return;
         }
         lastTrackerError = null;
@@ -421,6 +428,17 @@ public final class EngineSession implements LivenessSession {
         double ear = (FaceFeatures.eyeAspectRatio(lm, FaceFeatures.EYE_LEFT) + FaceFeatures.eyeAspectRatio(lm, FaceFeatures.EYE_RIGHT)) / 2.0;
         return new FrameFeatures(f.sequence(), f.arrivalNanos(), FaceFeatures.yaw(lm), FaceFeatures.pitch(lm), ear,
                 FaceFeatures.mouthAspectRatio(lm), FaceFeatures.mouthWidthRatio(lm), g[0], g[1]);
+    }
+
+    /** A frame with no usable face still moves the clock: the challenge times out even when the face has left. */
+    private void onUnusableFrame(Frame f) {
+        if (state == State.ACTIVE) {
+            if (challenge.onFrame(f.sequence(), f.arrivalNanos(), false) == ChallengeSession.Outcome.CHALLENGE_TIMEOUT) {
+                finish(Verdict.Tier.ACTIVE_REQUIRED, ErrorState.CHALLENGE_TIMEOUT, "challenge_timeout");
+            }
+        } else {
+            checkPassiveTimeout(f);
+        }
     }
 
     private void checkPassiveTimeout(Frame f) {
@@ -485,14 +503,14 @@ public final class EngineSession implements LivenessSession {
                 finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.POOR_QUALITY, "cannot_judge");
                 break;
             default:
-                startActive(f, g, v1, v2, v4, v5);
+                startActive(f, g, v1, v2, v3, v4, v5);
         }
     }
 
     // ------------------------------------------------------------------ active
 
-    private void startActive(Frame f, DecisionGate.Decision g, TextureCnnVoter v1, MoireVoter v2, FrameEdgeVoter v4,
-                             ReflectionVoter v5) {
+    private void startActive(Frame f, DecisionGate.Decision g, TextureCnnVoter v1, MoireVoter v2, FlatnessVoter v3,
+                             FrameEdgeVoter v4, ReflectionVoter v5) {
         List<ChallengeType> pool = new ArrayList<>();
         for (String t : engine.config.value("active.challengeTypes", name()).split(",")) {
             pool.add(ChallengeType.valueOf(t.trim()));
@@ -516,6 +534,7 @@ public final class EngineSession implements LivenessSession {
         List<PadVoter> voters = new ArrayList<>();
         voters.add(v1);
         voters.add(v2);
+        voters.add(landmarkVoter("V3_flatness", v3)); // the head-turn challenges give flatness the motion it needs
         voters.add(imageVoter("V4_frame_edge", v4::vote));
         voters.add(imageVoter("V5_reflection", v5::vote));
         reevaluator = new ChallengeReevaluator(voters, new HashSet<>(Collections.singleton(v1.name())), 8, strict);
@@ -564,6 +583,21 @@ public final class EngineSession implements LivenessSession {
         } else if (challenge.current() != detectorFor) {
             nextPrompt(f);
         }
+    }
+
+    /** The flatness voter on the landmarks of the latest usable frames (the frame window itself is not needed). */
+    private PadVoter landmarkVoter(String name, FlatnessVoter v) {
+        return new PadVoter() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public Vote vote(List<Frame> window) {
+                return v.vote(new ArrayList<>(usableLandmarks));
+            }
+        };
     }
 
     /** A voter that works on one decoded frame, wrapped so the re-evaluation can run it on a window. */
