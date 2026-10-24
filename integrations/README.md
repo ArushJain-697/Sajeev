@@ -25,3 +25,10 @@ Not yet pinned: the `develop` line (failed, #05), `android-registration-client` 
 
 Run the patched MockMDS (from a Maven-packaged build copy): `java -Dsajeev.replay.dir=<folder> -Dsajeev.replay.fps=15 -cp "target/classes:<classpath>" io.mosip.mock.sbi.test.TestMockSBI "mosip.mock.sbi.device.purpose=Registration" "mosip.mock.sbi.biometric.type=Biometric Device"`. Measure with `python3 eval/rig/check_mockmds_fps.py`. A webcam source is possible by writing JPEGs into the replay folder with ffmpeg; it is not scripted yet.
 
+
+## Publishing to the forks (Arush's step; nothing is pushed by us)
+1. On GitHub, press **Fork** on each of: `mosip/registration-client`, `mosip/android-registration-client`, `mosip/android-camera-mds`, `mosip/mosip-mock-services` (four forks under your account).
+2. On the Mac: `integrations/make_fork_branches.sh ~/sajeev-forks`. It makes a fresh clone of each repo at the pinned commit, applies our patches as separate commits and creates the branches `sajeev/release-1.2.0.x`, `sajeev/liveness`, `sajeev/frame-feed` and `sajeev/replay-fps`. It was tested on 24 Oct 2026: every patch applies cleanly on a fresh clone.
+3. In each folder: `git remote add fork https://github.com/<your-user>/<repo>.git` then `git push fork <branch>`.
+4. In each fork, open a pull request from the branch into the fork's own default branch (the plan: PRs inside your own forks, not into MOSIP's repos).
+The desktop branch targets `release-1.2.0.x` (JDK 11); the Android branch needs `android/app/libs/sajeev-engine.aar` (built from `integrations/engine-android`).
