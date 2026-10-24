@@ -6500,10 +6500,10 @@ index 0000000..ad11a3f
 +}
 diff --git a/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/LivenessClientConfig.java b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/LivenessClientConfig.java
 new file mode 100644
-index 0000000..2c3ce27
+index 0000000..305acb6
 --- /dev/null
 +++ b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/LivenessClientConfig.java
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,64 @@
 +package io.mosip.registration.service.liveness;
 +
 +import io.mosip.registration.context.ApplicationContext;
@@ -6519,6 +6519,7 @@ index 0000000..2c3ce27
 +	public static final String ENABLED = PREFIX + "enabled";
 +	public static final String MAX_RETRIES = PREFIX + "maxRetries";
 +	public static final String SESSION_TIMEOUT_MS = PREFIX + "sessionTimeoutMs";
++	public static final String GUIDANCE_OVERRIDES = PREFIX + "guidance.overrides";
 +
 +	public static final boolean DEFAULT_ENABLED = true;
 +	public static final int DEFAULT_MAX_RETRIES = 3;
@@ -6533,6 +6534,12 @@ index 0000000..2c3ce27
 +		} catch (RuntimeException e) {
 +			return null; // map not initialised
 +		}
++	}
++
++	/** @return the folder with guidance text overrides, or "none" (the default) */
++	public static String guidanceOverrides() {
++		String v = raw(GUIDANCE_OVERRIDES);
++		return v == null || v.trim().isEmpty() ? "none" : v.trim();
 +	}
 +
 +	/** @return false only when the value is exactly "false"; anything else keeps liveness on */
@@ -6563,10 +6570,10 @@ index 0000000..2c3ce27
 +}
 diff --git a/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/LivenessMessages.java b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/LivenessMessages.java
 new file mode 100644
-index 0000000..9fd596f
+index 0000000..c208891
 --- /dev/null
 +++ b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/LivenessMessages.java
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,46 @@
 +package io.mosip.registration.service.liveness;
 +
 +import java.io.IOException;
@@ -6595,7 +6602,11 @@ index 0000000..9fd596f
 +		}
 +		try {
 +			if (keys == null) {
-+				keys = new GuidanceKeys();
++				try {
++					keys = GuidanceKeys.fromConfig(LivenessClientConfig.guidanceOverrides());
++				} catch (IllegalArgumentException bad) {
++					keys = new GuidanceKeys(); // a faulty override file never blanks the screen: the PDF wording is used
++				}
 +			}
 +			String t = keys.text(key, lang == null ? "en" : lang);
 +			return t == null ? key : t;
@@ -6611,10 +6622,10 @@ index 0000000..9fd596f
 +}
 diff --git a/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/SajeevLivenessProvider.java b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/SajeevLivenessProvider.java
 new file mode 100644
-index 0000000..dcebed6
+index 0000000..f287c34
 --- /dev/null
 +++ b/registration/registration-services/src/main/java/io/mosip/registration/service/liveness/SajeevLivenessProvider.java
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,155 @@
 +package io.mosip.registration.service.liveness;
 +
 +import java.nio.file.Path;
@@ -6685,7 +6696,10 @@ index 0000000..dcebed6
 +					LOGGER.warn("Model signature verification is switched OFF by mosip.registration.liveness.model.verify=false");
 +					models = new EngineModels(dir);
 +				} else {
-+					models = EngineModels.loadVerified(dir, EngineModels.bundledTrustRoot(), 0);
++					// a folder managed by ModelStore has a CURRENT file naming the verified version in use
++					java.nio.file.Path inUse = java.nio.file.Files.isRegularFile(dir.resolve("CURRENT"))
++							? new io.sajeev.model.ModelStore(dir, EngineModels.bundledTrustRoot()).currentDir() : dir;
++					models = EngineModels.loadVerified(inUse, EngineModels.bundledTrustRoot(), 0);
 +				}
 +				engine = new LivenessEngine(models, Config.load(new Properties()), EngineSettings.defaults(),
 +						new AuditLog(System::currentTimeMillis), new LivenessMetrics());

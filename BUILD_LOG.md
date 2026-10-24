@@ -531,3 +531,6 @@
 
 ## Fork branches prepared (24 Oct 2026)
 - `integrations/make_fork_branches.sh <dir>` clones each of the four MOSIP repos at the pinned commit and applies our patches as separate commits on the branches `sajeev/release-1.2.0.x` (patches 0001, 0005), `sajeev/liveness` (0006, 0007), `sajeev/frame-feed` (0002, 0003) and `sajeev/replay-fps` (0004). Tested: all patches apply cleanly on fresh clones. Found and fixed on the way: patch 0002 had 10 build-cache files (`.gradle/`) inside it; regenerated with only the 2 real source files. Nothing is pushed; the push and the PRs inside the forks are Arush's step (README in `integrations/`).
+
+## Client refresh (24 Oct 2026)
+- The desktop client now reads `mosip.registration.liveness.guidance.overrides` (a faulty override folder falls back to the PDF wording, never a blank screen). Services and client rebuilt with the current engine (delivered-rate fix, six languages, store layout, overrides); 18 client liveness tests pass with the real engine; patch 0005 regenerated; the Lenovo bundle jars and checksums rebuilt (`SAJEEV_Lenovo_Bundle.zip`). The Android AAR/APK were last rebuilt before the delivered-rate fix and the six-language texts: rebuild them before any device run (`integrations/engine-android/prepare.sh`, then `assembleRelease`, then `flutter build apk`).
