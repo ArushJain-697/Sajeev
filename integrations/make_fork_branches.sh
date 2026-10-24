@@ -5,7 +5,7 @@
 # Then, per repo: cd <output-dir>/<repo>; git remote add fork https://github.com/<you>/<repo>.git; git push fork <branch>
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; P="$ROOT/integrations/patches"; U="$ROOT/../upstream"; B="$ROOT/../tools-local/build"
-OUT="$1"; mkdir -p "$OUT"
+OUT="$(mkdir -p "$1" && cd "$1" && pwd)"
 NAME="Arush Jain"; MAIL="thearushjain3321@gmail.com"
 commit() { git -c user.name="$NAME" -c user.email="$MAIL" commit -q -m "$1" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"; }
 apply() { # apply <patch> <strip> <message>
