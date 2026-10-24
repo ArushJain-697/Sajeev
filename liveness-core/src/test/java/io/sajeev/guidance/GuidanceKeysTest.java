@@ -17,6 +17,12 @@ class GuidanceKeysTest {
         GuidanceKeys g = new GuidanceKeys();
         assertEquals(new TreeSet<>(g.keys("en")), new TreeSet<>(g.keys("fr")));
         assertEquals(new TreeSet<>(g.keys("en")), new TreeSet<>(g.keys("ar")));
+        for (String l : new String[] {"hi", "kn", "ta"}) {
+            assertEquals(new TreeSet<>(g.keys("en")), new TreeSet<>(g.keys(l)), l + " is missing keys");
+            for (String k : g.keys(l)) {
+                assertTrue(g.text(k, l).trim().length() > 1, l + " has a blank text for " + k);
+            }
+        }
     }
 
     @Test

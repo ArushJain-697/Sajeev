@@ -17,7 +17,7 @@ import java.util.Properties;
 public final class GuidanceKeys {
 
     /** Languages shipped in this build. */
-    public static final String[] LANGS = {"en", "fr", "ar"};
+    public static final String[] LANGS = {"en", "fr", "ar", "hi", "kn", "ta"};
 
     private static final Map<ErrorState, String> ERROR_KEYS;
 
