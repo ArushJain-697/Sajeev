@@ -41,6 +41,31 @@ public class LivenessPaneController {
     }
 
     /** Safe from any thread: runs show() on the JavaFX thread. */
+    private javafx.scene.image.ImageView previewView;
+
+    /**
+     * Shows the camera picture behind the face oval (PDF: "live face preview"). Call it for every frame you want shown; it keeps
+     * one ImageView. Must run on the JavaFX thread. Pass null to go back to the plain oval.
+     */
+    public void setPreview(javafx.scene.image.Image picture) {
+        if (picture == null) {
+            if (previewView != null) {
+                guide.getChildren().remove(previewView);
+                previewView = null;
+            }
+            return;
+        }
+        if (previewView == null) {
+            previewView = new javafx.scene.image.ImageView();
+            previewView.setPreserveRatio(true);
+            previewView.setFitWidth(240);
+            previewView.setFitHeight(300);
+            previewView.setAccessibleText("Live camera picture");
+            guide.getChildren().add(0, previewView);
+        }
+        previewView.setImage(picture);
+    }
+
     public void showLater(UiState s) {
         Platform.runLater(() -> show(s));
     }

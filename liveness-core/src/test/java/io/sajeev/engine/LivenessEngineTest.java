@@ -254,4 +254,24 @@ class LivenessEngineTest {
         g.dispose();
         System.out.println("P1 border stand-in: " + run(jpegOf(img)));
     }
+
+    @Test
+    void test_diagnostics_are_visible_only_to_the_operator_when_an_admin_enabled_them_and_hold_no_biometric_data() throws Exception {
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.OPERATOR, policy());
+        feed(s, file("one_face.jpg"), 40);
+        io.sajeev.audit.DiagnosticMode on = new io.sajeev.audit.DiagnosticMode(true);
+        io.sajeev.audit.DiagnosticMode off = new io.sajeev.audit.DiagnosticMode(false);
+        java.util.Map<String, String> panel = s.diagnostics(on, io.sajeev.audit.DiagnosticMode.Audience.OPERATOR);
+        System.out.println("DIAGNOSTIC PANEL: " + panel);
+        assertTrue(panel.containsKey("delivered fps") && panel.containsKey("verdict"));
+        assertTrue(panel.keySet().stream().anyMatch(k -> k.startsWith("voter V1")), "voter lines are shown");
+        assertTrue(s.diagnostics(on, io.sajeev.audit.DiagnosticMode.Audience.RESIDENT).isEmpty());
+        assertTrue(s.diagnostics(on, io.sajeev.audit.DiagnosticMode.Audience.SUPERVISOR).isEmpty());
+        assertTrue(s.diagnostics(off, io.sajeev.audit.DiagnosticMode.Audience.OPERATOR).isEmpty(), "off by default");
+        assertTrue(on.forPacket(panel).isEmpty(), "never in a packet");
+        for (String v : panel.values()) {
+            assertTrue(v.length() < 120 && !v.matches(".*[A-Za-z0-9+/]{40,}.*"), "a value looks like data, not a status: " + v);
+        }
+        s.abort();
+    }
 }

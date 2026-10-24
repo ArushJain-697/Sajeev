@@ -210,6 +210,37 @@ public final class EngineSession implements LivenessSession {
         return lastTrackerError;
     }
 
+    /**
+     * Troubleshooting data for the diagnostic panel (PDF good-to-have). Shown only when an administrator enabled diagnostic mode,
+     * and only to the operator; always empty for packets. Holds states, labels, score bands and rates: never an image, a face
+     * template or an identifier.
+     *
+     * @param mode the diagnostic gate
+     * @param audience who is asking
+     * @return ordered key to value pairs, empty when the audience may not see them
+     */
+    public Map<String, String> diagnostics(io.sajeev.audit.DiagnosticMode mode, io.sajeev.audit.DiagnosticMode.Audience audience) {
+        Map<String, String> d = new LinkedHashMap<>();
+        d.put("state", state().name());
+        Verdict v = verdict;
+        d.put("verdict", v == null ? "none yet" : v.tier() + (v.error().isPresent() ? " / " + v.error().get() : "") + " / " + v.reason());
+        d.put("delivered fps", String.format(java.util.Locale.ROOT, "%.1f", measuredFps()));
+        d.put("minimum fps (config)", String.format(java.util.Locale.ROOT, "%.1f", minFps));
+        d.put("queue depth", Integer.toString(queue.size()));
+        d.put("avg processing ms per frame", String.format(java.util.Locale.ROOT, "%.0f", avgProcessingMs));
+        d.put("usable face frames", Long.toString(usableCount));
+        ErrorState g = lastTrackerError;
+        d.put("last guidance", g == null ? "none" : g.name());
+        ChallengeType c = currentChallenge;
+        d.put("challenge", c == null ? "none" : c.name());
+        for (Map.Entry<String, Vote> e : passiveVotes.entrySet()) {
+            Vote vt = e.getValue();
+            d.put("voter " + e.getKey(), vt.label() + " (" + (vt.label() == Vote.Label.ABSTAIN ? "no score"
+                    : io.sajeev.audit.ScoreBand.of(vt.probability()).name()) + ") " + vt.reason());
+        }
+        return mode.panelFor(audience, d);
+    }
+
     /** @return the frame rate of the frames the device delivered, as the engine measured it (0 until two have arrived) */
     public double measuredFps() {
         double d = deliveredFps();
@@ -469,7 +500,7 @@ public final class EngineSession implements LivenessSession {
         long timeout = Long.parseLong(engine.config.value("active.challengeTimeoutMs", name()));
         ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(BLINK_MIN_FPS, 3.0, new SecureRandom()), pool,
                 policy.minChallenges(), timeout);
-        challenge = ce.newAttempt(guard.measuredFps());
+        challenge = ce.newAttempt(measuredFps());
         if (challenge == null) {
             finish(Verdict.Tier.LIMITED, ErrorState.ACTIVE_REQUIRED, "no_challenge_possible_at_this_fps");
             return;
@@ -512,7 +543,7 @@ public final class EngineSession implements LivenessSession {
         boolean detected = detector != null && detector.update(ff);
         ChallengeSession.Outcome o = challenge.onFrame(f.sequence(), f.arrivalNanos(), detected);
         LoadShedder.Plan plan = shedder.plan(queue.size(), avgProcessingMs,
-                guard.measuredFps() > 0 ? 1000.0 / guard.measuredFps() : 100.0, true);
+                measuredFps() > 0 ? 1000.0 / measuredFps() : 100.0, true);
         boolean runCnn = plan.cnnEveryNth() > 0 && processed % plan.cnnEveryNth() == 0;
         if (reevaluator.onFrame(f, runCnn) == ChallengeReevaluator.Status.PAD_FAIL) {
             finish(Verdict.Tier.ATTACK_SUSPECTED, ErrorState.PAD_FAIL, "attack_during_challenge");
