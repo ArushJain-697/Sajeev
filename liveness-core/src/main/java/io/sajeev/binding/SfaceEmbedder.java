@@ -49,6 +49,9 @@ public final class SfaceEmbedder implements AutoCloseable {
 
     /** @return cosine similarity of two embeddings, in [-1, 1] */
     public static double cosine(float[] a, float[] b) {
+        if (a == null || b == null || a.length != b.length) {
+            return -1.0; // not comparable: the least similar value, never a match
+        }
         double dot = 0, na = 0, nb = 0;
         for (int i = 0; i < a.length; i++) {
             dot += a[i] * b[i];

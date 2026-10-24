@@ -274,4 +274,72 @@ class LivenessEngineTest {
         }
         s.abort();
     }
+
+    @Test
+    void test_attack_P3_replay_standin_moving_screen_picture_is_rejected_or_failure_is_reported() throws Exception {
+        // A video replay shows a MOVING face on a screen. Stand-in: the photo drifts and zooms a little from frame to frame.
+        java.awt.image.BufferedImage src = photo();
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+        long t = 1_000_000_000L;
+        for (int i = 0; i < 60 && s.verdict() == null; i++) {
+            int dx = (int) Math.round(12 * Math.sin(i / 4.0));
+            double zoom = 1.0 + 0.03 * Math.sin(i / 6.0);
+            java.awt.image.BufferedImage f = new java.awt.image.BufferedImage(src.getWidth(), src.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g = f.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(src, dx, 0, (int) (src.getWidth() * zoom), (int) (src.getHeight() * zoom), null);
+            g.dispose();
+            s.onFrame(new Frame(jpegOf(f), t + i * 100_000_000L, i));
+            Thread.sleep(40);
+        }
+        long end = System.currentTimeMillis() + 30000;
+        while (s.verdict() == null && System.currentTimeMillis() < end) {
+            Thread.sleep(50);
+        }
+        assertNotNull(s.verdict());
+        System.out.println("P3 stand-in: " + s.verdict().tier() + " " + votes(s));
+        assertTrue(s.verdict().tier() != Verdict.Tier.LIVE_PASSIVE && s.verdict().tier() != Verdict.Tier.LIVE_ACTIVE);
+        s.abort();
+    }
+
+    @Test
+    void test_attack_P5_bent_print_standin_is_rejected_or_failure_is_reported() throws Exception {
+        // A print bent around a cup: horizontal positions are squeezed by a cylinder mapping, strongest at the sides.
+        java.awt.image.BufferedImage src = photo();
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(src.getWidth(), src.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
+        double w = src.getWidth();
+        double r = w / 2.0 / Math.sin(1.0); // a cylinder spanning +-1 radian
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                double u = (x - w / 2) / (w / 2); // -1..1
+                double sx = w / 2 + r * Math.asin(Math.max(-1, Math.min(1, u * Math.sin(1.0)))) ;
+                int xs = (int) Math.max(0, Math.min(src.getWidth() - 1, Math.round(sx)));
+                img.setRGB(x, y, src.getRGB(xs, y));
+            }
+        }
+        System.out.println("P5 stand-in: " + run(jpegOf(img)));
+    }
+
+    @Test
+    void test_attack_P6_cutout_standin_eyes_blanked_is_rejected_or_failure_is_reported() throws Exception {
+        java.awt.image.BufferedImage img = photo();
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(java.awt.Color.BLACK);
+        g.fillOval(190, 130, 40, 24); // where the eyes are in the photo: a print with the eyes cut out shows what is behind it
+        g.fillOval(250, 130, 40, 24);
+        g.dispose();
+        System.out.println("P6 stand-in: " + run(jpegOf(img)));
+    }
+
+    @Test
+    void test_attack_P4_swap_standin_a_capture_with_two_faces_is_never_bound() throws Exception {
+        // P4 live-then-swap needs a second real identity, which we do not have. What can be checked: after a session, a capture
+        // that does not show exactly one face never binds (one real swap case, two people in the capture).
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+        feed(s, file("one_face.jpg"), 40);
+        io.sajeev.binding.Binding.Result r = s.checkCapture(file("two_faces_composite.jpg"), System.nanoTime(), 3000);
+        assertEquals(io.sajeev.binding.Binding.Verdict.CAPTURE_UNBOUND, r.verdict());
+        assertTrue(r.failedChecks().contains("faces"), r.failedChecks().toString());
+        s.abort();
+    }
 }

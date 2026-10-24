@@ -269,10 +269,10 @@ public final class EngineSession implements LivenessSession {
                 float[] emb = engine.models.sface.embed(FaceAlignment.align(img, lm));
                 r = binding.bind(1, emb, GeometryRatios.of(lm), arrivalNanos, captureTimeoutMillis);
             } else {
-                r = binding.bind(faces.size(), new float[128], new double[4], arrivalNanos, captureTimeoutMillis);
+                r = binding.bind(faces.size(), new float[0], new double[0], arrivalNanos, captureTimeoutMillis);
             }
         } catch (Exception e) {
-            r = binding.bind(0, new float[128], new double[4], arrivalNanos, captureTimeoutMillis);
+            r = binding.bind(0, new float[0], new double[0], arrivalNanos, captureTimeoutMillis);
         }
         bindingResult = r;
         Map<String, String> a = new LinkedHashMap<>();

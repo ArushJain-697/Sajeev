@@ -30,6 +30,9 @@ public final class GeometryRatios {
 
     /** @return the largest relative difference between two ratio vectors, as a fraction (0.05 = 5%) */
     public static double maxRelativeDifference(double[] a, double[] b) {
+        if (a == null || b == null || a.length != b.length) {
+            return Double.MAX_VALUE; // vectors that cannot be compared never count as close
+        }
         double worst = 0;
         for (int i = 0; i < a.length; i++) {
             double base = Math.max(Math.abs(b[i]), 1e-9);
