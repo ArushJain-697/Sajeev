@@ -472,7 +472,7 @@ public final class EngineSession implements LivenessSession {
         MoireVoter v2 = new MoireVoter(engine.models.detector, st.moireShare, analysis);
         FlatnessVoter v3 = new FlatnessVoter(st.flatMinYaw, st.flatResidual, 200, 0.03, 42L);
         FrameEdgeVoter v4 = new FrameEdgeVoter(st.edgeMinShare, st.edgeMaxFaceShare, st.edgeMargin);
-        ReflectionVoter v5 = new ReflectionVoter(0.02, 0.6, 0.15, 0.95);
+        ReflectionVoter v5 = new ReflectionVoter(st.reflectionGlare, st.reflectionRatio, st.reflectionDark, st.reflectionBright);
         passiveVotes.clear();
         passiveVotes.put(v1.name(), v1.vote(window));
         passiveVotes.put(v2.name(), v2.vote(window));

@@ -343,14 +343,22 @@ class LivenessEngineTest {
     }
 
     @Test
-    void test_attack_P6_cutout_standin_eyes_blanked_is_rejected_or_failure_is_reported() throws Exception {
+    void test_P6_cutout_standin_is_judged_and_the_verdict_is_reported_known_limit() throws Exception {
+        // KNOWN LIMIT (24 Oct 2026): this stand-in is a DIGITAL edit of a photo, so it has no print or screen texture to catch.
+        // The texture voter calls it live (0.896) and a still image gives the other voters nothing, so it passes the passive
+        // gate. An earlier version of this test "rejected" it only because the texture voter had a preprocessing bug (it
+        // called every face an attack). The real P6 test is a recorded cut-out print (DEV recordings), not this stand-in.
         java.awt.image.BufferedImage img = photo();
         java.awt.Graphics2D g = img.createGraphics();
         g.setColor(java.awt.Color.BLACK);
         g.fillOval(190, 130, 40, 24); // where the eyes are in the photo: a print with the eyes cut out shows what is behind it
         g.fillOval(250, 130, 40, 24);
         g.dispose();
-        System.out.println("P6 stand-in: " + run(jpegOf(img)));
+        io.sajeev.engine.EngineSession s = engine.start(Workflow.RESIDENT, policy());
+        feed(s, jpegOf(img), 130);
+        assertNotNull(s.verdict(), "no verdict for the P6 stand-in");
+        System.out.println("P6 stand-in (known limit, not a recorded attack): " + s.verdict().tier() + " " + votes(s));
+        s.abort();
     }
 
     @Test

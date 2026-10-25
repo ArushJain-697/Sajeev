@@ -35,6 +35,9 @@ public final class FaceQuality {
         }
     }
 
+    /** Side of the square the face crop is resized to before sharpness is measured. */
+    static final int MEASURE_SIDE = 160;
+
     private FaceQuality() {
     }
 
@@ -56,13 +59,17 @@ public final class FaceQuality {
             y1 = clamp((int) Math.round(box.y() + box.h()), y0 + 1, image.getHeight());
             share = (box.w() * box.h()) / ((double) image.getWidth() * image.getHeight());
         }
-        int w = x1 - x0;
-        int h = y1 - y0;
+        // Measure on the face crop at a fixed size, so the same face gives the same sharpness at 480p, 720p and 1080p.
+        PixelImage region = box == null ? image : image.crop(x0, y0, x1 - x0, y1 - y0).resize(MEASURE_SIDE, MEASURE_SIDE);
+        x0 = 0;
+        y0 = 0;
+        int w = region.getWidth();
+        int h = region.getHeight();
         double[] gray = new double[w * h];
         double sum = 0.0;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                int rgb = image.getRGB(x0 + x, y0 + y);
+                int rgb = region.getRGB(x0 + x, y0 + y);
                 int r = (rgb >> 16) & 0xFF;
                 int g = (rgb >> 8) & 0xFF;
                 int b = rgb & 0xFF;

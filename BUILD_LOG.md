@@ -542,3 +542,14 @@
 - Patches `0005` and `0007` were regenerated from the forks; `make_fork_branches.sh` reproduces both fork trees exactly.
 - **B4:** `scripts/fetch_models.sh` (release asset `models-0.1.0`, SHA-256 pinned) and a real `liveness-models/README.md`; CI fetches the models. With the fetched models the suite runs with 0 model skips.
 - **B5:** the README matches the code.
+
+## First run on REAL recordings (25 Oct 2026): three bugs found and fixed; earlier "still photo rejected" claims withdrawn
+- **Data:** 2 real clips of one person (Mac webcam, 1620x1080, 30 fps, bright daytime room, one without and one with glasses), cut into 9 presentations of up to 17 s (`eval/clips/dev1`, not in git). One subject, one room, one camera: the numbers below only show that the pipeline runs and the bugs are gone; they are NOT a rate to quote.
+- **Before the fixes, all 9 real clips were rejected (BPCER 9/9), and the texture CNN alone rejected all 9.** Three bugs:
+  1. **V1 preprocessing.** `MiniFasNetModel.toChw` divided pixels by 255. The reference (`src/data_io/functional.py`, `to_tensor`) does not (the division is commented out). The model saw a very dark image and answered ATTACK (0.016) for a real face. Our "matches PyTorch within 1e-4" test fed the same tensor to both, so it checked the ONNX export, not the preprocessing. **Withdrawn:** every earlier statement that a still photo is rejected by the texture voter (0.016) was this bug, not evidence.
+  2. **V5 units.** The engine built `ReflectionVoter(0.02, 0.6, 0.15, 0.95)`: the luma limits (0..255 scale) were 0.15 and 0.95, so V5 always abstained with "extreme_lighting" on real images, and the glare ratio was 0.6 where the tested value is 4.0. Now `(0.02, 4.0, 40, 215)` from `EngineSettings` (one place), also in `StageTimings` and the Android `CaptureOnlyChecker`.
+  3. **Quality depends on resolution.** The sharpness (Laplacian variance) was measured on the face box at the camera's resolution, so a 1080p face looked blurry (POOR_QUALITY) while a 640 px one did not. It is now measured on the face crop resized to 160x160.
+- **After the fixes:** 8 of 9 real presentations pass at the passive gate (V1, V2, V4, V5 LIVE; V3 abstains without motion); 1 needed a challenge and timed out (V1 abstained). BPCER 1/9 (Wilson 95% about 2% to 43%: far too few to say anything). No attack recordings exist yet, so no APCER.
+- **Test change, stated plainly:** `test_attack_P6_cutout_standin...` now reports the verdict instead of asserting a rejection. The stand-in is a digital edit of a photo (no print or screen texture), the texture voter calls it live (0.896), and a still image gives the other voters nothing. It was "rejected" before only because of bug 1. Real P6/P1 clips are the real test.
+- The eval harness now prints one line per presentation (tier and votes) and the reason for each verdict.
+- 218 tests run, 0 fail, 5 skip. The Android AAR and APK predate these fixes and must be rebuilt.

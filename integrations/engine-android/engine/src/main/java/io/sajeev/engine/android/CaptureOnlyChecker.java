@@ -41,7 +41,7 @@ public final class CaptureOnlyChecker {
     private final YuNetDetector detector;
     private final TextureCnnVoter texture;
     private final FrameEdgeVoter edge = new FrameEdgeVoter(0.5, 0.80, 12);
-    private final ReflectionVoter reflection = new ReflectionVoter(0.02, 0.6, 0.15, 0.95);
+    private final ReflectionVoter reflection = new ReflectionVoter(io.sajeev.engine.EngineSettings.defaults().reflectionGlare, io.sajeev.engine.EngineSettings.defaults().reflectionRatio, io.sajeev.engine.EngineSettings.defaults().reflectionDark, io.sajeev.engine.EngineSettings.defaults().reflectionBright);
 
     public CaptureOnlyChecker(YuNetDetector detector, MiniFasNetModel v2, MiniFasNetModel v1se) {
         this.detector = detector;

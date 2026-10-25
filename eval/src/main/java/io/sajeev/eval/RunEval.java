@@ -85,7 +85,10 @@ public final class RunEval {
         try (LivenessEngine engine = new LivenessEngine(new EngineModels(Paths.get(models)), Config.load(new Properties()),
                 EngineSettings.defaults(), new AuditLog(System::currentTimeMillis), new LivenessMetrics())) {
             for (String[] row : readManifest(Paths.get(manifest))) {
-                ps.add(run(engine, Paths.get(clips), row));
+                Presentation done = run(engine, Paths.get(clips), row);
+                System.out.println("clip " + done.file + " [" + done.species + "] -> " + done.tier + (done.accepted ? " (accepted)" : "")
+                        + " votes " + done.voteLabels);
+                ps.add(done);
             }
         }
         Files.write(Paths.get(out), Metrics.toJson(ps, threshold, minLive).getBytes(StandardCharsets.UTF_8));
@@ -161,6 +164,7 @@ public final class RunEval {
             Thread.sleep(50);
         }
         Verdict v = s.verdict();
+        System.out.println("  " + row[0] + ": frames=" + frames.size() + " reason=" + (v == null ? "none" : v.reason() + " " + v.error()));
         boolean accepted = v != null && (v.tier() == Verdict.Tier.LIVE_PASSIVE || v.tier() == Verdict.Tier.LIVE_ACTIVE);
         Map<String, String> labels = new TreeMap<>();
         Map<String, Double> probs = new TreeMap<>();

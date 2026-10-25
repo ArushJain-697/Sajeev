@@ -57,7 +57,7 @@ public final class StageTimings {
         MoireVoter moire = new MoireVoter(models.detector, 0.2);
         FlatnessVoter flat = new FlatnessVoter(0.14, 0.02, 200, 0.03, 42L);
         FrameEdgeVoter edge = new FrameEdgeVoter(0.5, 0.8, 12);
-        ReflectionVoter refl = new ReflectionVoter(0.02, 0.6, 0.15, 0.95);
+        ReflectionVoter refl = new ReflectionVoter(EngineSettings.defaults().reflectionGlare, EngineSettings.defaults().reflectionRatio, EngineSettings.defaults().reflectionDark, EngineSettings.defaults().reflectionBright);
         Frame f = new Frame(jpeg, 0, 0);
         List<Frame> window = new ArrayList<>(Collections.nCopies(3, f));
         for (int i = 0; i < runs + 3; i++) {

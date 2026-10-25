@@ -1,5 +1,5 @@
 // #18 (WS1) | Bible §6.3 | One MiniFASNet model on ONNX Runtime. Preprocessing matches the Silent-Face reference
-// (crop with scale, resize to 80x80, BGR, values 0..1). Java 11 only.
+// (crop with scale, resize to 80x80, BGR, values 0..255: the reference's to_tensor does NOT divide by 255). Java 11 only.
 package io.sajeev.passive.texture;
 
 import ai.onnxruntime.OnnxTensor;
@@ -114,9 +114,9 @@ public final class MiniFasNetModel implements AutoCloseable {
         float[] chw = new float[3 * plane];
         for (int i = 0; i < plane; i++) {
             int rgb = bgr.getRGB(i % SIDE, i / SIDE);
-            chw[i] = (rgb & 0xFF) / 255f;                  // B
-            chw[plane + i] = ((rgb >> 8) & 0xFF) / 255f;   // G
-            chw[2 * plane + i] = ((rgb >> 16) & 0xFF) / 255f; // R
+            chw[i] = (rgb & 0xFF);                         // B, 0..255 as in the reference
+            chw[plane + i] = ((rgb >> 8) & 0xFF);         // G
+            chw[2 * plane + i] = ((rgb >> 16) & 0xFF);    // R
         }
         return chw;
     }

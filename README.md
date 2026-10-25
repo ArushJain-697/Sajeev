@@ -13,7 +13,7 @@ A face is stored only if the person was judged live **and** the captured face is
 - **Bench** (`bench/run.sh`), **evaluation harness** (`eval/`: APCER/BPCER with Wilson intervals, baselines, sealed held-out run), **interoperability harness** (`interop/`).
 
 ## What does not exist yet (read this first)
-- **No recordings of real people or real attacks.** Every liveness and attack result is synthetic or a still photo. No APCER or BPCER number exists and none should be quoted. All thresholds are starting values, not tuned.
+- **Almost no recordings.** Real data so far: 2 clips of one person in one room (a first run found and fixed three bugs, `BUILD_LOG.md`, 25 Oct). **No recording of a real attack exists.** Every attack result is synthetic or a still photo, and a digitally edited photo is NOT rejected (it has no print or screen texture). No APCER or BPCER number exists and none should be quoted. All thresholds are starting values, not tuned.
 - No real phone, no Windows machine, no MOSIP server login: neither client was run end to end. The Android settings, the frame-rate behaviour and the screens were checked by unit tests, an emulator and compile.
 - Hindi, Kannada and Tamil texts are **machine translations** written for this project and not reviewed by native speakers; French and Arabic are unreviewed drafts.
 - The MiniFASNet weights have no stated licence; the MediaPipe model card terms are unchecked (`DISCLOSURES.md`). The signing key is a development key.

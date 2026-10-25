@@ -11,3 +11,8 @@ eval/clips/
 eval/data/
 eval/blink/real/
 liveness-models/models/
+
+# raw recordings never go in git
+*.mov
+*.MOV
+*.mp4

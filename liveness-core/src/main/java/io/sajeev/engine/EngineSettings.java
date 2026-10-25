@@ -7,6 +7,11 @@ public final class EngineSettings {
     public int passiveFrames = 8;
     /** Time (in frame arrival time) without a decision before the session gives up with a guidance error. */
     public long passiveTimeoutMillis = 10_000;
+    /** Reflection voter (V5): face glare share, glare ratio to the background, and the mean-luma range (0..255) it can judge. TARGET. */
+    public double reflectionGlare = 0.02;
+    public double reflectionRatio = 4.0;
+    public double reflectionDark = 40;
+    public double reflectionBright = 215;
     /** Wall-clock time without any delivered frame (after the first one) before the session ends as a lost device. */
     public long streamStallMillis = 5_000;
     /** The bounded frame queue; the oldest frame is dropped when it is full. */
