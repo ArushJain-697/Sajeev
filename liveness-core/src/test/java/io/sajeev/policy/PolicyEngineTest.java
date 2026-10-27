@@ -30,7 +30,7 @@ class PolicyEngineTest {
             assertTrue(p.livenessEnabled(), w + ": liveness enabled by default");
             assertEquals(PolicyEngine.Mode.HYBRID, p.mode(), w + ": hybrid (passive first, then active when needed)");
             assertTrue(p.activeEnabled(), w + ": active liveness on");
-            assertEquals(2, p.minChallenges());
+            assertEquals(w == Workflow.RESIDENT ? 2 : 3, p.minChallenges(), w + ": operators and supervisors get three challenges, residents two");
             assertEquals(3, p.maxRetries());
             assertEquals(0.80, p.passiveThreshold(), 1e-9);
             assertEquals(PolicyEngine.RepeatedFailure.BLOCK, p.onRepeatedFailure(), w + ": BLOCK after repeated failure");

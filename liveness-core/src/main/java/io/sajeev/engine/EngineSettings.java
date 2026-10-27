@@ -64,6 +64,8 @@ public final class EngineSettings {
      * same verdict. Used by run_eval and the bench together with {@code EngineSession.awaitIdle(long)}.
      */
     public boolean deterministic = false;
+    /** Seed of the challenge draw in deterministic mode (evaluation: vary it to sample many different challenge sequences). */
+    public long challengeSeed = 42L;
     /** Test hook only: artificial delay per processed frame, to prove a slow engine never blocks the producer. */
     public long testDelayMillis = 0;
     /** The prompt counts as shown when the active stage starts (bench and tests). A UI sets this to false and calls markPrompted(). */

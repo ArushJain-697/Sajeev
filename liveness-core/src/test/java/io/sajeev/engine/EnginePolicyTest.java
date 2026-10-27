@@ -25,7 +25,7 @@ class EnginePolicyTest {
         for (Workflow w : Workflow.values()) {
             PolicyConfig p = e.policyFor(w);
             assertEquals(0.80, p.passiveThreshold(), 1e-9);
-            assertEquals(2, p.minChallenges());
+            assertEquals(w == Workflow.RESIDENT ? 2 : 3, p.minChallenges());
             assertEquals(3, p.maxRetries());
         }
     }
@@ -42,6 +42,16 @@ class EnginePolicyTest {
         assertEquals(0.95, e.policyFor(Workflow.SUPERVISOR).passiveThreshold(), 1e-9);
         assertEquals(3, e.policyFor(Workflow.OPERATOR).minChallenges());
         assertEquals(2, e.policyFor(Workflow.RESIDENT).minChallenges());
+        assertEquals(3, e.policyFor(Workflow.SUPERVISOR).minChallenges());
         assertEquals(5, e.policyFor(Workflow.RESIDENT).maxRetries());
+    }
+
+    @Test
+    void test_an_explicit_workflow_setting_overrides_the_stricter_default() throws Exception {
+        Properties p = new Properties();
+        p.setProperty(Config.PREFIX + "active.minChallenges.operator", "1");
+        LivenessEngine e = engineWith(p);
+        assertEquals(1, e.policyFor(Workflow.OPERATOR).minChallenges());
+        assertEquals(3, e.policyFor(Workflow.SUPERVISOR).minChallenges());
     }
 }

@@ -35,3 +35,7 @@ The desktop client reads three of these itself with client-side defaults, so it 
 
 ## Engine settings that are not client configuration keys (EngineSettings, TARGET values, 27 Oct 2026)
 `frozenMaxMeanAbsDiff` (0.05) and `frozenMinPairs` (5): a stream whose consecutive 64x64 thumbnails barely change is a frozen picture. `minPassiveMillis` (700): least camera time before a passive pass. `maxArrivalGapMillis` (10,000) and `maxRejectedTimestamps` (10): bad arrival times. `maxImageSide` (8192), `maxImagePixels` (40,000,000): larger images are refused. `maxConcurrentSessions` (16). `streamStallMillis` (5,000). `deterministic` (false): evaluation mode, no load shedding. Config now rejects out-of-range values (`passive.threshold` and `binding.embedding.threshold` in [0, 1], `passive.minLiveVotes` 1 to 5, positive `passive.voterWeights`, enumerated `frameProcessing`, `acceleration`) with a ConfigException.
+
+
+## Defaults that differ by workflow (27 Oct 2026)
+`active.minChallenges` defaults to **2 for resident capture and 3 for operator and supervisor authentication**, because operators and supervisors vouch for other people's registrations and each extra challenge multiplies the chance that a replay of a recorded face passes by luck. An explicit `mosip.registration.liveness.active.minChallenges.<workflow>` (or the global key) always wins. Passive pass: `passive.minLiveVotes` (default 2) counts only voters that give evidence of life: the texture CNN (V1), flatness (V3) and eyelid motion (V6); the moire, frame-edge and reflection voters can only veto.

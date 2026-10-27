@@ -26,6 +26,20 @@ public final class Config {
     /** Defaults. The PDF flow is hybrid for every workflow, and the repeated-failure behaviour is BLOCK. */
     public static final Map<String, String> DEFAULTS;
 
+    /**
+     * Defaults that differ by workflow (red team 2, 27 Oct 2026). Operators and supervisors vouch for other people's
+     * registrations, so a lucky replay of a recorded face must be less likely to get through: three challenges instead of two.
+     * Measured on replays of real recordings of one person: 1 of 24 sessions passed two challenges by chance.
+     * Any explicit key.workflow property still wins.
+     */
+    static final Map<String, Map<String, String>> WORKFLOW_DEFAULTS;
+    static {
+        Map<String, Map<String, String>> w = new HashMap<>();
+        w.put("operator", Collections.singletonMap("active.minChallenges", "3"));
+        w.put("supervisor", Collections.singletonMap("active.minChallenges", "3"));
+        WORKFLOW_DEFAULTS = Collections.unmodifiableMap(w);
+    }
+
     static {
         Map<String, String> d = new TreeMap<>();
         d.put("enabled", "true");
@@ -85,6 +99,10 @@ public final class Config {
         Map<String, Map<String, String>> overrides = new HashMap<>();
         for (String w : WORKFLOWS) {
             Map<String, String> o = new TreeMap<>();
+            Map<String, String> wd = WORKFLOW_DEFAULTS.get(w);
+            if (wd != null) {
+                o.putAll(wd);
+            }
             for (String key : DEFAULTS.keySet()) {
                 String v = props.getProperty(PREFIX + key + "." + w);
                 if (v != null) {

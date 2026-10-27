@@ -713,7 +713,7 @@ public final class EngineSession implements LivenessSession {
         if (st.deterministic) {
             try {
                 SecureRandom r = SecureRandom.getInstance("SHA1PRNG");
-                r.setSeed(42L);
+                r.setSeed(st.challengeSeed);
                 return r;
             } catch (java.security.NoSuchAlgorithmException e) {
                 // fall through to the normal generator
