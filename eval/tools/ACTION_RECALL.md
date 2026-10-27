@@ -1,0 +1,3 @@
+# Detector recall on labelled compliance clips
+
+Record clips named `turnleft_01.mov`, `turnright_01.mov`, `lookup_01.mov`, `lookdown_01.mov`, `openmouth_01.mov` (3 to 4 s: look straight for one second, then do ONLY that action at normal speed, then return). Cut each into frames (`ffmpeg -i x.mov -vf fps=15,scale=800:-1 -q:v 3 turnleft_01/%04d.jpg`) and run `Recall.java` (in this folder, as ActionRecall.java.txt; package io.sajeev.engine) with the models and the frame folders. It prints, for every clip, whether the right detector fired and which other detectors fired. The baseline is the median of the first second, as in the engine.

@@ -28,7 +28,8 @@ class PolicyEngineTest {
         for (Workflow w : Workflow.values()) {
             PolicyEngine.WorkflowPolicy p = e.policyFor(w); // online and offline use the same synced values
             assertTrue(p.livenessEnabled(), w + ": liveness enabled by default");
-            assertEquals(PolicyEngine.Mode.HYBRID, p.mode(), w + ": hybrid (passive first, then active when needed)");
+            assertEquals(w == Workflow.RESIDENT ? PolicyEngine.Mode.HYBRID : PolicyEngine.Mode.ACTIVE_ALWAYS, p.mode(),
+                    w + ": residents are hybrid (passive first, then active when needed); operators and supervisors always get the challenge");
             assertTrue(p.activeEnabled(), w + ": active liveness on");
             assertEquals(w == Workflow.RESIDENT ? 2 : 3, p.minChallenges(), w + ": operators and supervisors get three challenges, residents two");
             assertEquals(3, p.maxRetries());

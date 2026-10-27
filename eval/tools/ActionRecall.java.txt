@@ -1,0 +1,52 @@
+package io.sajeev.engine;
+import io.sajeev.active.*;
+import io.sajeev.api.ChallengeType;
+import io.sajeev.face.*;
+import io.sajeev.image.*;
+import java.nio.file.*;
+import java.util.*;
+/** Detector recall on LABELLED clips: folder names like turnleft_01 (the person was told to do exactly that action).
+ *  Baseline = median of the first second (as the engine takes it from the neutral passive frames); then every detector runs
+ *  on the rest. Prints whether the right detector fires (recall) and whether any other detector fires (confusion). */
+public class Recall {
+  static ChallengeType type(String n) {
+    String k = n.replaceAll("_\\d+$", "");
+    switch (k) {
+      case "turnleft": return ChallengeType.TURN_HEAD_LEFT; case "turnright": return ChallengeType.TURN_HEAD_RIGHT;
+      case "lookup": return ChallengeType.LOOK_UP; case "lookdown": return ChallengeType.LOOK_DOWN;
+      case "openmouth": return ChallengeType.OPEN_MOUTH; case "smile": return ChallengeType.SMILE;
+      case "blink": return ChallengeType.BLINK; default: return null;
+    }
+  }
+  public static void main(String[] a) throws Exception {
+    EngineModels m = new EngineModels(Paths.get(a[0]));
+    ActionThresholds th = ActionThresholds.defaults();
+    ChallengeType[] all = {ChallengeType.TURN_HEAD_LEFT, ChallengeType.TURN_HEAD_RIGHT, ChallengeType.LOOK_UP, ChallengeType.LOOK_DOWN, ChallengeType.OPEN_MOUTH, ChallengeType.SMILE, ChallengeType.BLINK};
+    Map<ChallengeType, int[]> rec = new EnumMap<>(ChallengeType.class);
+    for (int k = 1; k < a.length; k++) {
+      Path dir = Paths.get(a[k]); ChallengeType want = type(dir.getFileName().toString());
+      List<Path> fs = new ArrayList<>(); try (var s = Files.list(dir)) { s.filter(x -> x.toString().endsWith(".jpg")).sorted().forEach(fs::add); }
+      List<FrameFeatures> ff = new ArrayList<>();
+      for (int i = 0; i < fs.size(); i++) {
+        PixelImage img = ImageCodec.decode(Files.readAllBytes(fs.get(i)));
+        List<Detection> d = m.detector.detect(img, 0.6, 0.3);
+        if (d.size() != 1) continue;
+        float[][] lm = m.landmarks.landmarks(img, d.get(0)); double[] g = FaceFeatures.gaze(lm);
+        double ear = (FaceFeatures.eyeAspectRatio(lm, FaceFeatures.EYE_LEFT) + FaceFeatures.eyeAspectRatio(lm, FaceFeatures.EYE_RIGHT)) / 2.0;
+        ff.add(new FrameFeatures(i, i * 66_666_667L, FaceFeatures.yaw(lm), FaceFeatures.pitch(lm), ear, FaceFeatures.mouthAspectRatio(lm), FaceFeatures.mouthWidthRatio(lm), g[0], g[1]));
+      }
+      if (ff.size() < 30) { System.out.println(dir.getFileName() + ": too few usable frames (" + ff.size() + ")"); continue; }
+      ActionDetectors.Baseline base = ActionDetectors.Baseline.of(ff.subList(0, 15));
+      StringBuilder fired = new StringBuilder(); Integer atWant = null;
+      for (ChallengeType t : all) {
+        ActionDetectors.Detector d = ActionDetectors.create(t, base, th);
+        for (int i = 15; i < ff.size(); i++) if (d.update(ff.get(i))) { if (t == want) atWant = i - 15; else fired.append(t).append("@").append(i - 15).append(" "); break; }
+      }
+      int[] r = rec.computeIfAbsent(want, x -> new int[2]); r[1]++; if (atWant != null) r[0]++;
+      System.out.printf("%-14s want %-16s -> %s   other detectors that also fired: %s%n", dir.getFileName(), want, atWant == null ? "MISSED" : "fired after " + atWant + " frames", fired.length() == 0 ? "none" : fired);
+    }
+    StringBuilder sb = new StringBuilder("RECALL ");
+    for (Map.Entry<ChallengeType, int[]> e : rec.entrySet()) sb.append(e.getKey()).append(" ").append(e.getValue()[0]).append("/").append(e.getValue()[1]).append("  ");
+    System.out.println(sb);
+  }
+}

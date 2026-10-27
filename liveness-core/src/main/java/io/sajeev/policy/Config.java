@@ -35,8 +35,11 @@ public final class Config {
     static final Map<String, Map<String, String>> WORKFLOW_DEFAULTS;
     static {
         Map<String, Map<String, String>> w = new HashMap<>();
-        w.put("operator", Collections.singletonMap("active.minChallenges", "3"));
-        w.put("supervisor", Collections.singletonMap("active.minChallenges", "3"));
+        Map<String, String> strict = new TreeMap<>();
+        strict.put("active.minChallenges", "3");
+        strict.put("policy.mode", "ACTIVE_ALWAYS");
+        w.put("operator", Collections.unmodifiableMap(strict));
+        w.put("supervisor", Collections.unmodifiableMap(strict));
         WORKFLOW_DEFAULTS = Collections.unmodifiableMap(w);
     }
 

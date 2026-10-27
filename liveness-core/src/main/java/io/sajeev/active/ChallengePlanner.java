@@ -36,8 +36,9 @@ public final class ChallengePlanner {
      * @param pool the configured pool of challenge types
      * @param measuredFps the stream's measured frame rate
      * @param count how many challenges to issue (config minChallenges, at least 1)
-     * @return {@code count} distinct challenge types in random order, or an empty list when too few types
-     *         are allowed at this frame rate (the caller must then treat active liveness as unavailable)
+     * @return {@code count} distinct challenge types in random order, or an empty list when no
+     *         type (or only one, for a sequence longer than the pool) is allowed at this frame rate (the caller must then treat
+     *         active liveness as unavailable). Up to the pool size the types are distinct; beyond it they repeat, never twice in a row.
      */
     public List<ChallengeType> draw(List<ChallengeType> pool, double measuredFps, int count) {
         List<ChallengeType> allowed = new ArrayList<>();
@@ -46,8 +47,25 @@ public final class ChallengePlanner {
                 allowed.add(t);
             }
         }
-        if (count < 1 || allowed.size() < count) {
+        if (count < 1 || allowed.isEmpty()) {
             return Collections.emptyList();
+        }
+        if (allowed.size() < count) {
+            if (allowed.size() < 2) {
+                return Collections.emptyList(); // a repeat-free-in-a-row sequence needs at least two types
+            }
+            // A long "follow the prompts" sequence (for example six directions out of four): the same type may come back
+            // later, never twice in a row. Chance of a replay getting every prompt right in time falls with the length.
+            List<ChallengeType> seq = new ArrayList<>();
+            ChallengeType prev = null;
+            while (seq.size() < count) {
+                ChallengeType next = allowed.get(random.nextInt(allowed.size()));
+                if (next != prev) {
+                    seq.add(next);
+                    prev = next;
+                }
+            }
+            return seq;
         }
         Collections.shuffle(allowed, random); // Fisher-Yates with the SecureRandom
         return new ArrayList<>(allowed.subList(0, count));

@@ -643,7 +643,10 @@ public final class EngineSession implements LivenessSession {
         }
         DecisionGate.Decision g = DecisionGate.decide(votes, weights(votes.size()), positive, true, policy.passiveThreshold(),
                 minLive, activeEnabled, true);
-        if (g.outcome() == DecisionGate.Outcome.ACTIVE_REQUIRED && !g.strict()
+        // policy.mode ACTIVE_ALWAYS (operators and supervisors by default): the passive stage can veto but never passes anyone.
+        // Security then rests on the challenge, whose chance of passing a replay can be measured, not on the heuristic voters.
+        boolean activeAlways = "ACTIVE_ALWAYS".equalsIgnoreCase(engine.config.value("policy.mode", name()));
+        if (g.outcome() == DecisionGate.Outcome.ACTIVE_REQUIRED && !g.strict() && !activeAlways
                 && f.arrivalNanos() - firstUsableArrival < st.maxPassiveObserveMillis * 1_000_000L) {
             // no attack vote, only too little evidence of life so far (for example nothing has blinked yet): keep watching
             // for a while before asking the person to do something
@@ -656,7 +659,15 @@ public final class EngineSession implements LivenessSession {
         audit(LivenessAuditEvent.REG_LIVENESS_PASSIVE_RESULT, a);
         switch (g.outcome()) {
             case PASSIVE_PASS:
-                finish(Verdict.Tier.LIVE_PASSIVE, null, "passive_pass");
+                if (activeAlways) {
+                    if (!Boolean.parseBoolean(engine.config.value("active.enabled", name()))) {
+                        finish(Verdict.Tier.LIMITED, ErrorState.ACTIVE_REQUIRED, "active_disabled"); // never a pass without the challenge
+                    } else {
+                        startActive(f, g, v1, v2, v3, v4, v5);
+                    }
+                } else {
+                    finish(Verdict.Tier.LIVE_PASSIVE, null, "passive_pass");
+                }
                 break;
             case PAD_FAIL:
                 finish(Verdict.Tier.ATTACK_SUSPECTED, ErrorState.PAD_FAIL, "gate_pad_fail");

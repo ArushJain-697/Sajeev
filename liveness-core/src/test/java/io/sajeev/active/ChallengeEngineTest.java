@@ -100,4 +100,26 @@ class ChallengeEngineTest {
     void test_planner_requires_a_secure_random() {
         assertThrows(IllegalArgumentException.class, () -> new ChallengePlanner(8, 3, null));
     }
+
+    @Test
+    void test_a_sequence_longer_than_the_pool_repeats_types_but_never_twice_in_a_row() {
+        ChallengePlanner pl = new ChallengePlanner(15, 3.0, new java.security.SecureRandom());
+        java.util.List<ChallengeType> pool = java.util.Arrays.asList(ChallengeType.TURN_HEAD_LEFT, ChallengeType.TURN_HEAD_RIGHT,
+                ChallengeType.LOOK_UP, ChallengeType.LOOK_DOWN);
+        for (int run = 0; run < 500; run++) {
+            java.util.List<ChallengeType> seq = pl.draw(pool, 30.0, 6);
+            org.junit.jupiter.api.Assertions.assertEquals(6, seq.size());
+            for (int i = 1; i < seq.size(); i++) {
+                org.junit.jupiter.api.Assertions.assertNotEquals(seq.get(i - 1), seq.get(i));
+            }
+            org.junit.jupiter.api.Assertions.assertTrue(pool.containsAll(seq));
+        }
+    }
+
+    @Test
+    void test_a_one_type_pool_cannot_make_a_longer_sequence() {
+        ChallengePlanner pl = new ChallengePlanner(15, 3.0, new java.security.SecureRandom());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                pl.draw(java.util.Collections.singletonList(ChallengeType.TURN_HEAD_LEFT), 30.0, 3).isEmpty());
+    }
 }
