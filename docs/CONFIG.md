@@ -31,3 +31,7 @@ mosip.registration.liveness.model.manifest=models/manifest.json
 ## Client-side keys (desktop, #45)
 
 The desktop client reads three of these itself with client-side defaults, so it works when the server sends nothing: `mosip.registration.liveness.enabled` (default true; only the exact value `false` turns liveness off), `.maxRetries` (3) and `.sessionTimeoutMs` (45000, client only, not an engine key). A missing or invalid value falls back to the default and never turns liveness off.
+
+
+## Engine settings that are not client configuration keys (EngineSettings, TARGET values, 27 Oct 2026)
+`frozenMaxMeanAbsDiff` (0.05) and `frozenMinPairs` (5): a stream whose consecutive 64x64 thumbnails barely change is a frozen picture. `minPassiveMillis` (700): least camera time before a passive pass. `maxArrivalGapMillis` (10,000) and `maxRejectedTimestamps` (10): bad arrival times. `maxImageSide` (8192), `maxImagePixels` (40,000,000): larger images are refused. `maxConcurrentSessions` (16). `streamStallMillis` (5,000). `deterministic` (false): evaluation mode, no load shedding. Config now rejects out-of-range values (`passive.threshold` and `binding.embedding.threshold` in [0, 1], `passive.minLiveVotes` 1 to 5, positive `passive.voterWeights`, enumerated `frameProcessing`, `acceleration`) with a ConfigException.

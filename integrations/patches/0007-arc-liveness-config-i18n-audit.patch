@@ -1,8 +1,148 @@
+diff --git a/SAJEEV_ANDROID_SETUP.md b/SAJEEV_ANDROID_SETUP.md
+new file mode 100644
+index 00000000..4a5fb20a
+--- /dev/null
++++ b/SAJEEV_ANDROID_SETUP.md
+@@ -0,0 +1,102 @@
++# SAJEEV on the Android Registration Client: clean-machine setup
++
++This fork (`sajeev/liveness`, base MOSIP `develop` 6e1943c) refuses to store or accept a face unless the SAJEEV engine
++says the capture is live and bound to the person in front of the camera. On a clean machine the app BUILDS only after
++step 1, and it CAPTURES a face only after steps 2 and 3. Without them every face capture is refused (fail closed). That
++is correct behaviour, but it looks like a broken product, so follow all steps.
++
++Paths below are in the main SAJEEV repo (`sajeev/`) unless noted.
++
++## 1. Build the engine AAR and put it in the client
++
++The client compiles against `android/app/libs/sajeev-engine.aar` (`implementation files('libs/sajeev-engine.aar')`).
++The AAR is not committed. Without it the build fails at compile time with missing `io.sajeev.*` imports.
++
++```
++cd sajeev
++mvn -pl liveness-api,liveness-core -DskipTests package          # JDK 11, makes the two engine jars
++cd integrations/engine-android
++sh prepare.sh                                                   # copies the jars (and the androidTest models)
++gradle --offline :engine:assembleRelease                        # Gradle 8.5, JDK 17
++cp engine/build/outputs/aar/engine-release.aar <this fork>/android/app/libs/sajeev-engine.aar
++```
++
++Then, in this fork, with Flutter 3.10.x: `sh pigeon.sh`, `flutter gen-l10n`, `flutter build apk --debug`.
++(The pigeon and l10n outputs are git-ignored.)
++
++## 2. Provide the model files
++
++The engine reads its models from the app's private directory `files/models` (`<app filesDir>/models`). It loads them only
++after the ECDSA-signed `manifest.txt` + `manifest.sig` verify against the trust root bundled in the engine, and every
++file's SHA-256 matches. A model without a valid signature is refused. The models are NOT in git (see
++`liveness-models/README.md` for their licences, and note the MiniFASNet weights have no stated licence).
++
++Get them: `sajeev/scripts/fetch_models.sh` (downloads the model zip, checks its SHA-256, unpacks to
++`sajeev/liveness-models/models`: `manifest.txt`, `manifest.sig`, `yunet/`, `landmark/`, `minifasnet/`, `sface/`).
++
++Two ways to put them on the device:
++
++* **Bundle (recommended, automatic).** Copy the directory into the app assets before building:
++  `mkdir -p android/app/src/main/assets/sajeev-models && cp -R liveness-models/models/* android/app/src/main/assets/sajeev-models/`.
++  On the first start the engine (`ModelProvisioner`, in the AAR) copies exactly the files that `manifest.txt` lists, plus
++  the manifest and signature, to `files/models`. It copies again only if the bundled manifest differs from the installed
++  one. Nothing is downloaded at run time. The copy is not trusted: verification still runs on the copied files.
++* **adb push (debug builds).**
++  ```
++  adb push liveness-models/models /data/local/tmp/sajeev-models
++  adb shell run-as io.mosip.registration_client mkdir -p files
++  adb shell run-as io.mosip.registration_client cp -R /data/local/tmp/sajeev-models files/models
++  ```
++
++If the models are missing or fail verification the engine is UNAVAILABLE for the whole session and the person sees
++"could not be verified". Nothing is stored.
++
++## 3. The frame feed: the patched mock SBI
++
++Passive and challenge liveness need video frames. The client does not open the camera itself: the SBI (the device
++service) owns it. A stock MOSIP SBI has no way to hand frames to another app. SAJEEV adds a frame feed to the
++android-camera-mds MockAndroidSBI: `integrations/patches/0003-mockandroidsbi-frame-feed.patch`, branch
++`sajeev/frame-feed` of android-camera-mds.
++
++* The feed is a bound service `io.mosip.mock.sbi.feed.FrameFeedService`, protected by the signature-level permission
++  `io.mosip.mock.sbi.permission.FRAME_FEED`. A **signature** permission is granted only if the SBI and the client are
++  signed with the **same key**. Sign both with the same keystore (the debug key works if both are debug builds from the
++  same machine).
++* **Install order: SBI first, then the client.** The client's `uses-permission` (merged from the AAR manifest) is only
++  granted at install time if the permission already exists. If you installed the client first, uninstall it and install
++  it again after the SBI.
++* The SBI also needs its device keystore (`mosipface.p12`) set up to sign Info and rCapture; see
++  `integrations/README.md`, "Driving the Android mock on the emulator".
++* The mock feed replays files or synthetic frames (`mock:true` in the device info). It is NOT a camera. A LIVE verdict
++  from the mock stack proves the pipeline works, not that a real person was in front of a real camera. The client labels
++  such sessions "mock" in the liveness dialog.
++
++## 4. A real SBI without the feed: LIMITED (capture-only)
++
++With a real vendor SBI (no feed service) the engine cannot see a video stream. The session is **LIMITED**: it can look
++only at the final captured still image (face quality and a single-image presentation-attack check), not at motion or
++challenges, and it can never bind the capture to a live session. The Java gate treats LIMITED as not live:
++`checkCapture` returns false, so **no face is stored** and the dialog says the device cannot verify liveness. That is
++deliberate: a still-image check alone is exactly what a printed photo defeats. To use a real SBI in production it
++needs the feed (or a certified liveness/PAD in the SBI itself, which MOSIP's own SBI spec leaves to the vendor). An
++administrator can switch the whole feature off with the server global parameter
++`mosip.registration.liveness.enabled=false`; that setting is server-only (a local preference cannot change it) and
++everything then behaves like upstream MOSIP.
++
++## 5. Settings (global parameters, from the server)
++
++All keys start with `mosip.registration.liveness.` and come from the server sync only; the client refuses local
++overrides and UI writes of these keys. Defaults: `enabled=true`, `maxRetries=3`, `passive.threshold=0.80`,
++`faceAuth.enabled=false` (face login and approval are off until switched on; password login is unchanged).
++Face authentication (login, packet authentication, approval) locks a user out of the FACE route for 5 minutes after
++`maxRetries` failed attempts; the password route stays available.
++
++## 6. Checks
++
++```
++flutter test --dart-define=FLUTTER_FONTS=<flutter>/bin/cache/artifacts/material_fonts test/liveness test/liveness_events_test.dart
++cd android && ./gradlew :clientmanager:testDebugUnitTest --tests '*FaceAuthLockoutTest' --tests '*LivenessSettingsTest' --tests '*LocalConfigDAOLivenessTest'
++```
++
++Note: the upstream `clientmanager` test source set at base 6e1943c does not compile as a whole (eight old test files
++use stale constructors). To run the SAJEEV tests, move those files aside temporarily; this is not caused by SAJEEV.
 diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
-index ce97ad65..6575ee62 100644
+index ce97ad65..289dbf0b 100644
 --- a/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
 +++ b/android/app/src/main/java/io/mosip/registration_client/api_services/BiometricsDetailsApi.java
-@@ -133,16 +133,30 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+@@ -13,6 +13,8 @@ import android.content.pm.PackageManager;
+ import android.graphics.Bitmap;
+ import android.net.Uri;
+ import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
+ import android.util.Log;
+ import android.widget.Toast;
+ 
+@@ -128,21 +130,53 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+ 
+     private LivenessApi livenessApi;
+ 
++    /** SAJEEV A7: JP2 decode, PNG encode and the ONNX inference of the binding run here, never on the platform main thread. */
++    private final java.util.concurrent.ExecutorService livenessWorker = java.util.concurrent.Executors.newSingleThreadExecutor();
++    private final Handler mainHandler = new Handler(Looper.getMainLooper());
++
++    /** SAJEEV A5: face authentication attempt limit per user (maxRetries failures lock face auth for 5 minutes). */
++    static final io.mosip.registration.clientmanager.util.FaceAuthLockout FACE_LOCKOUT =
++            new io.mosip.registration.clientmanager.util.FaceAuthLockout(
++                    io.mosip.registration.clientmanager.util.FaceAuthLockout.DEFAULT_LOCK_MILLIS);
++
++    /**
++     * SAJEEV A1/A2: the captures that are a real face capture. The exception photo is asked of the SBI as type FACE
++     * (see discoverSBI), so it is gated like the face; operator onboarding stores the face as the reference template,
++     * so it is gated too. There is no MOSIP reason to leave either out.
++     */
++    static boolean isFaceCapture(Modality m) {
++        return m == Modality.FACE || m == Modality.EXCEPTION_PHOTO;
++    }
++
+     /** SAJEEV #55/#56: a field id of the form "faceAuth:<userId>" means authenticate this operator's face; nothing is stored. */
+     public static final String FACE_AUTH_PREFIX = "faceAuth:";
  
      public void setLivenessApi(LivenessApi api) {
          this.livenessApi = api;
@@ -13,6 +153,8 @@ index ce97ad65..6575ee62 100644
       * SAJEEV #54: a face is stored only if a live session exists and the captured face is bound to it. Fails closed:
       * no liveness bridge, no decodable image, no live verdict or a failed binding all refuse. Other modalities pass.
       */
+-    private boolean livenessAllowsStoring(List<BiometricsDto> dtos) {
+-        if (currentModality != Modality.FACE) {
 +    /** The device capture timeout from the client's settings (30 s when it is not set), for Binding's time window. */
 +    private long captureTimeoutMillis() {
 +        try {
@@ -23,8 +165,8 @@ index ce97ad65..6575ee62 100644
 +        }
 +    }
 +
-     private boolean livenessAllowsStoring(List<BiometricsDto> dtos) {
-         if (currentModality != Modality.FACE) {
++    private boolean livenessAllowsStoring(Modality modality, List<BiometricsDto> dtos) {
++        if (!isFaceCapture(modality)) {
              return true;
          }
 +        if (!new io.mosip.registration.clientmanager.util.LivenessSettings(globalParamRepository).enabled()) {
@@ -33,7 +175,7 @@ index ce97ad65..6575ee62 100644
          try {
              if (livenessApi == null || dtos == null || dtos.isEmpty()) {
                  return false;
-@@ -154,7 +168,7 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+@@ -154,7 +188,7 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
              Bitmap bmp = new JP2Decoder(jp2).decode();
              ByteArrayOutputStream png = new ByteArrayOutputStream();
              bmp.compress(Bitmap.CompressFormat.PNG, 100, png);
@@ -42,6 +184,209 @@ index ce97ad65..6575ee62 100644
          } catch (Exception e) {
              Log.e(TAG, "Liveness check of the captured face failed: refusing to store it", e);
              return false;
+@@ -169,6 +203,11 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+     public void invokeDiscoverSbi(@NonNull String fieldId, @NonNull String modality,
+             @NonNull BiometricsPigeon.Result<String> result) {
+         auditManagerService.audit(AuditEvent.BIOMETRIC_CAPTURE, Components.REGISTRATION);
++        if (fieldId.startsWith(FACE_AUTH_PREFIX)
++                && FACE_LOCKOUT.isLocked(fieldId.substring(FACE_AUTH_PREFIX.length()))) {
++            result.error(new SecurityException("FACE_AUTH_LOCKED")); // the password stays available
++            return;
++        }
+         currentModality = getModality(modality);
+         this.fieldId = fieldId;
+         discoverSBI();
+@@ -1103,11 +1142,48 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+                 return;
+             }
+             boolean isOperatorOnboarding = fieldId.equals(OPERATOR_BIOMETRICS);
+-            List<BiometricsDto> biometricsDtoList = biometricsService.handleRCaptureResponse(currentModality, respData,
++            final Modality modality = currentModality;
++            final String capturedFieldId = fieldId;
++            final BiometricsPigeon.Result<String> capturedResult = biometricResult;
++            List<BiometricsDto> biometricsDtoList = biometricsService.handleRCaptureResponse(modality, respData,
+                     getExceptionAttributes(), isOperatorOnboarding);
+-            // if attempts is zero, there is no need to maintain the counter
+-            if (fieldId.equals(OPERATOR_BIOMETRICS)) {
+-                removeDuplicatesFromOperatorBiometricList(currentModality);
++            if (isFaceCapture(modality) && !biometricsDtoList.isEmpty()) {
++                // SAJEEV A1/A2/A7: a face (also the operator's reference face and the exception photo) is stored only after
++                // live AND bound; the check runs off the main thread and the result is answered on it.
++                final List<BiometricsDto> toCheck = biometricsDtoList;
++                livenessWorker.execute(() -> {
++                    boolean allowed = livenessAllowsStoring(modality, toCheck);
++                    mainHandler.post(() -> completeCapture(modality, capturedFieldId, capturedResult, toCheck, isOperatorOnboarding, allowed));
++                });
++                return;
++            }
++            completeCapture(modality, capturedFieldId, capturedResult, biometricsDtoList, isOperatorOnboarding, true);
++
++        } catch (BiometricsServiceException e) {
++            auditManagerService.audit(AuditEvent.R_CAPTURE_PARSE_FAILED, Components.REGISTRATION, e.getMessage());
++            Log.e(TAG, "R-Capture failed: " + e.getErrorCode(), e);
++            String message = e.getMessage() != null ? e.getMessage() : "Biometric capture failed";
++            Toast.makeText(activity.getApplicationContext(), message, Toast.LENGTH_SHORT).show();
++        } catch (Exception e) {
++            auditManagerService.audit(AuditEvent.R_CAPTURE_PARSE_FAILED, Components.REGISTRATION, e.getMessage());
++            Log.e(TAG, "Failed to parse rcapture response", e);
++        }
++
++    }
++
++    /** Stores the captured biometrics (main thread). {@code livenessOk} is false when a face capture was refused. */
++    private void completeCapture(Modality modality, String capturedFieldId, BiometricsPigeon.Result<String> capturedResult,
++                                 List<BiometricsDto> biometricsDtoList, boolean isOperatorOnboarding, boolean livenessOk) {
++        try {
++            if (!livenessOk) {
++                // nothing is stored, also not for operator onboarding (the reference face)
++                Toast.makeText(activity.getApplicationContext(),
++                        "Face liveness could not be verified. Please try again.", Toast.LENGTH_SHORT).show();
++                capturedResult.error(new SecurityException("LIVENESS_REFUSED"));
++                return;
++            }
++            if (isOperatorOnboarding) {
++                removeDuplicatesFromOperatorBiometricList(modality);
+                 biometricsDtoList.forEach(biometricsDto -> {userOnboardService.getOperatorBiometrics().add(biometricsDto);});
+                 List<BiometricsDto> biometricsDtoListCopy=new ArrayList<>();
+                 biometricsDtoListCopy.addAll(biometricsDtoList);
+@@ -1127,9 +1203,9 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+                 }
+ 
+ 
+-                biometricResult.success("Ok");
++                capturedResult.success("Ok");
+             } else {
+-                currentAttempt = this.registrationService.getRegistrationDto().getBioAttempt(fieldId, currentModality);
++                currentAttempt = this.registrationService.getRegistrationDto().getBioAttempt(capturedFieldId, modality);
+ 
+                 if (biometricsDtoList.isEmpty()) {
+                     Toast.makeText(
+@@ -1140,18 +1216,12 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+                     return;
+                 }
+ 
+-                if (!livenessAllowsStoring(biometricsDtoList)) {
+-                    Toast.makeText(activity.getApplicationContext(),
+-                            "Face liveness could not be verified. Please try again.", Toast.LENGTH_SHORT).show();
+-                    biometricResult.error(new SecurityException("LIVENESS_REFUSED"));
+-                    return;
+-                }
+                 biometricsDtoList.forEach(dto -> {
+                     try {
+                         this.registrationService.getRegistrationDto().addBiometric(
+-                                fieldId,
+-                                (currentModality == Modality.EXCEPTION_PHOTO) || (currentModality == Modality.FACE)
+-                                        ? currentModality.getAttributes().get(0)
++                                capturedFieldId,
++                                (modality == Modality.EXCEPTION_PHOTO) || (modality == Modality.FACE)
++                                        ? modality.getAttributes().get(0)
+                                         : Modality.getBioAttribute(dto.getBioSubType()),
+                                 currentAttempt,
+                                 dto
+@@ -1160,19 +1230,12 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+                         Log.e(TAG, ex.getMessage(), ex);
+                     }
+                 });
+-                biometricResult.success("Ok");
++                capturedResult.success("Ok");
+             }
+-
+-        } catch (BiometricsServiceException e) {
+-            auditManagerService.audit(AuditEvent.R_CAPTURE_PARSE_FAILED, Components.REGISTRATION, e.getMessage());
+-            Log.e(TAG, "R-Capture failed: " + e.getErrorCode(), e);
+-            String message = e.getMessage() != null ? e.getMessage() : "Biometric capture failed";
+-            Toast.makeText(activity.getApplicationContext(), message, Toast.LENGTH_SHORT).show();
+         } catch (Exception e) {
+             auditManagerService.audit(AuditEvent.R_CAPTURE_PARSE_FAILED, Components.REGISTRATION, e.getMessage());
+-            Log.e(TAG, "Failed to parse rcapture response", e);
++            Log.e(TAG, "Failed to store the captured biometrics", e);
+         }
+-
+     }
+ 
+     /**
+@@ -1181,20 +1244,42 @@ public class BiometricsDetailsApi implements BiometricsPigeon.BiometricsApi {
+      * (LIVENESS_REFUSED). The captured face is never stored here.
+      */
+     private void parseFaceAuthResponse(InputStream respData) {
+-        String userId = fieldId.substring(FACE_AUTH_PREFIX.length());
++        final String userId = fieldId.substring(FACE_AUTH_PREFIX.length());
++        final Modality modality = currentModality;
++        final BiometricsPigeon.Result<String> result = biometricResult;
+         try {
+-            List<BiometricsDto> dtos = biometricsService.handleRCaptureResponseForAuth(currentModality, respData, getExceptionAttributes());
+-            io.sajeev.session.FaceAuthCheck.Outcome o = io.sajeev.session.FaceAuthCheck.run(userId,
+-                    () -> livenessAllowsStoring(dtos), () -> biometricsService.matchOperatorFace(userId, dtos),
+-                    FaceAuthTickets.INSTANCE);
+-            if (o == io.sajeev.session.FaceAuthCheck.Outcome.LIVENESS_REFUSED) {
+-                biometricResult.error(new SecurityException("LIVENESS_REFUSED"));
++            if (FACE_LOCKOUT.isLocked(userId)) {
++                result.error(new SecurityException("FACE_AUTH_LOCKED"));
+                 return;
+             }
+-            biometricResult.success(o.name());
++            final List<BiometricsDto> dtos = biometricsService.handleRCaptureResponseForAuth(modality, respData, getExceptionAttributes());
++            final int maxFailures = new io.mosip.registration.clientmanager.util.LivenessSettings(globalParamRepository).maxRetries();
++            livenessWorker.execute(() -> { // SAJEEV A7: binding and match off the main thread
++                try {
++                    io.sajeev.session.FaceAuthCheck.Outcome o = io.sajeev.session.FaceAuthCheck.run(userId,
++                            () -> livenessAllowsStoring(modality, dtos), () -> biometricsService.matchOperatorFace(userId, dtos),
++                            FaceAuthTickets.INSTANCE);
++                    if (o == io.sajeev.session.FaceAuthCheck.Outcome.MATCH) {
++                        FACE_LOCKOUT.recordSuccess(userId);
++                    } else {
++                        FACE_LOCKOUT.recordFailure(userId, maxFailures); // SAJEEV A5: no match and refused both count
++                    }
++                    mainHandler.post(() -> {
++                        if (o == io.sajeev.session.FaceAuthCheck.Outcome.LIVENESS_REFUSED) {
++                            result.error(new SecurityException("LIVENESS_REFUSED"));
++                        } else {
++                            result.success(o.name());
++                        }
++                    });
++                } catch (Exception e) {
++                    Log.e(TAG, "Face authentication failed", e);
++                    FACE_LOCKOUT.recordFailure(userId, maxFailures);
++                    mainHandler.post(() -> result.error(e));
++                }
++            });
+         } catch (Exception e) {
+             Log.e(TAG, "Face authentication failed", e);
+-            biometricResult.error(e);
++            result.error(e);
+         }
+     }
+ 
+diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/CommonDetailsApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/CommonDetailsApi.java
+index ceba929f..24da1526 100644
+--- a/android/app/src/main/java/io/mosip/registration_client/api_services/CommonDetailsApi.java
++++ b/android/app/src/main/java/io/mosip/registration_client/api_services/CommonDetailsApi.java
+@@ -58,6 +58,12 @@ public class CommonDetailsApi implements CommonDetailsPigeon.CommonDetailsApi {
+     public void saveVersionToGlobalParam(@NonNull String id, @NonNull String value, @NonNull CommonDetailsPigeon.Result<String> result) {
+         String response = "";
+         try {
++            if (io.mosip.registration.clientmanager.util.LivenessSettings.isServerOnlyKey(id)) {
++                // SAJEEV A4: liveness settings come from the server sync only, never from a UI-callable write
++                Log.w(getClass().getSimpleName(), "Refused UI write of a server-only liveness setting: " + id);
++                result.success("");
++                return;
++            }
+             masterDataService.saveGlobalParam(id, value);
+             response = "OK";
+         } catch (Exception e) {
+@@ -81,6 +87,12 @@ public class CommonDetailsApi implements CommonDetailsPigeon.CommonDetailsApi {
+     public void saveScreenHeaderToGlobalParam(@NonNull String id, @NonNull String value, @NonNull CommonDetailsPigeon.Result<String> result) {
+         String response = "";
+         try {
++            if (io.mosip.registration.clientmanager.util.LivenessSettings.isServerOnlyKey(id)) {
++                // SAJEEV A4: liveness settings come from the server sync only, never from a UI-callable write
++                Log.w(getClass().getSimpleName(), "Refused UI write of a server-only liveness setting: " + id);
++                result.success("");
++                return;
++            }
+             masterDataService.saveGlobalParam(id, value);
+             response = "OK";
+         } catch (Exception e) {
 diff --git a/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java b/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
 index 2cae9d48..2f3b6143 100644
 --- a/android/app/src/main/java/io/mosip/registration_client/api_services/LivenessApi.java
@@ -119,6 +464,35 @@ index 921e4d4d..57b60a42 100644
  
      AuditEvent(String id, String type, String name, String description) {
          this.id = id;
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOImpl.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOImpl.java
+index 80de8ac9..d8da517e 100644
+--- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOImpl.java
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOImpl.java
+@@ -56,6 +56,10 @@ public class LocalConfigDAOImpl implements LocalConfigDAO {
+             String name = entry.getKey();
+             String value = entry.getValue();
+ 
++            if (io.mosip.registration.clientmanager.util.LivenessSettings.isServerOnlyKey(name)) {
++                Log.w(TAG, "Refused local override of a server-only liveness setting: " + name);
++                continue; // SAJEEV A4
++            }
+             try {
+                 saveOrUpdateLocalPreference(name, value, RegistrationConstants.PERMITTED_CONFIG_TYPE);
+             } catch (Exception e) {
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/repository/GlobalParamRepository.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/repository/GlobalParamRepository.java
+index af692849..ec7aa4dc 100644
+--- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/repository/GlobalParamRepository.java
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/repository/GlobalParamRepository.java
+@@ -305,7 +305,8 @@ public class GlobalParamRepository {
+             // Merge: local preferences override global parameters
+             globalParamMap.clear();
+             globalParamMap.putAll(freshGlobalParams);
+-            globalParamMap.putAll(localConfigs); // Local preferences take precedence
++            // Local preferences take precedence, except SAJEEV liveness settings (server-only, A4)
++            globalParamMap.putAll(io.mosip.registration.clientmanager.util.LivenessSettings.withoutServerOnlyKeys(localConfigs));
+             bioSdkProviderConfigCache = null;
+         } catch (Exception e) {
+             Log.e(TAG, "Error refreshing configuration cache", e);
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
 index bec31310..39ac788e 100644
 --- a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/service/Biometrics095Service.java
@@ -157,12 +531,96 @@ index bec31310..39ac788e 100644
                      IBioApiV2 matchProvider = bioSdkProviderFactory != null ? bioSdkProviderFactory.getProviderForMatch(modality) : null;
  
                      if (matchProvider == null) {
+diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/FaceAuthLockout.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/FaceAuthLockout.java
+new file mode 100644
+index 00000000..4c1d7e79
+--- /dev/null
++++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/FaceAuthLockout.java
+@@ -0,0 +1,78 @@
++package io.mosip.registration.clientmanager.util;
++
++import java.util.HashMap;
++import java.util.Map;
++import java.util.function.LongSupplier;
++
++/**
++ * SAJEEV A5: attempt limit for face authentication (login, packet authentication, approval). Per user: after
++ * {@code maxFailures} failed face attempts (no match, or liveness refused) the user's face authentication is locked for
++ * {@code lockMillis}. The password path is not touched (the normal password lockout still applies there). A success
++ * clears the user's counter. Pure logic, monotonic clock (not the wall clock), thread safe.
++ */
++public class FaceAuthLockout {
++
++    public static final long DEFAULT_LOCK_MILLIS = 5 * 60 * 1000L;
++
++    private static final class Entry {
++        int failures;
++        long lockedUntil; // monotonic millis; 0 = not locked
++        boolean locked;
++    }
++
++    private final LongSupplier clock;
++    private final long lockMillis;
++    private final Map<String, Entry> users = new HashMap<>();
++
++    public FaceAuthLockout(long lockMillis) {
++        this(lockMillis, () -> System.nanoTime() / 1_000_000L);
++    }
++
++    public FaceAuthLockout(long lockMillis, LongSupplier monotonicMillis) {
++        this.lockMillis = lockMillis <= 0 ? DEFAULT_LOCK_MILLIS : lockMillis;
++        this.clock = monotonicMillis;
++    }
++
++    private static String key(String userId) {
++        return userId == null ? "" : userId.trim().toLowerCase();
++    }
++
++    /** True while the user may not try face authentication. An expired lock is cleared (a fresh start). */
++    public synchronized boolean isLocked(String userId) {
++        Entry e = users.get(key(userId));
++        if (e == null || !e.locked) {
++            return false;
++        }
++        if (clock.getAsLong() - e.lockedUntil >= 0) {
++            users.remove(key(userId));
++            return false;
++        }
++        return true;
++    }
++
++    /** Records one failed face attempt; the maxFailures-th failure starts the lock window. Returns true if now locked. */
++    public synchronized boolean recordFailure(String userId, int maxFailures) {
++        int max = maxFailures < 1 ? 3 : maxFailures;
++        if (isLocked(userId)) {
++            return true;
++        }
++        Entry e = users.computeIfAbsent(key(userId), k -> new Entry());
++        e.failures++;
++        if (e.failures >= max) {
++            e.locked = true;
++            e.lockedUntil = clock.getAsLong() + lockMillis;
++            return true;
++        }
++        return false;
++    }
++
++    /** A successful face authentication clears the user's failures. */
++    public synchronized void recordSuccess(String userId) {
++        users.remove(key(userId));
++    }
++
++    public synchronized int failures(String userId) {
++        Entry e = users.get(key(userId));
++        return e == null ? 0 : e.failures;
++    }
++}
 diff --git a/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
 new file mode 100644
-index 00000000..5056639e
+index 00000000..38c4bf7c
 --- /dev/null
 +++ b/android/clientmanager/src/main/java/io/mosip/registration/clientmanager/util/LivenessSettings.java
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,88 @@
 +package io.mosip.registration.clientmanager.util;
 +
 +import io.mosip.registration.clientmanager.repository.GlobalParamRepository;
@@ -185,6 +643,27 @@ index 00000000..5056639e
 +    public static final double DEFAULT_PASSIVE_THRESHOLD = 0.80;
 +    /** Face login and approval are new on Android and stay off until switched on, so the password path is unchanged. */
 +    public static final boolean DEFAULT_FACE_AUTH_ENABLED = false;
++
++    /**
++     * SAJEEV A4: liveness settings are security settings. They come from the server sync only: a local preference with such
++     * a key is refused when written and ignored when the configuration cache is built.
++     */
++    public static boolean isServerOnlyKey(String key) {
++        return key != null && key.trim().toLowerCase(java.util.Locale.ROOT).startsWith(PREFIX);
++    }
++
++    /** The map without the server-only keys (a copy; the input is not changed). */
++    public static java.util.Map<String, String> withoutServerOnlyKeys(java.util.Map<String, String> local) {
++        java.util.Map<String, String> out = new java.util.HashMap<>();
++        if (local != null) {
++            for (java.util.Map.Entry<String, String> e : local.entrySet()) {
++                if (!isServerOnlyKey(e.getKey())) {
++                    out.put(e.getKey(), e.getValue());
++                }
++            }
++        }
++        return out;
++    }
 +
 +    private final GlobalParamRepository params;
 +
@@ -262,12 +741,123 @@ index 8f4063b8..b918c4ef 100644
      /**
       * Converts the {@link UserBiometric} and {@link BiometricsDto} to {@link BiometricRecord} and
       * {@link BiometricRecord array} respectively and calls the match method of Match-SDK library
+diff --git a/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOLivenessTest.java b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOLivenessTest.java
+new file mode 100644
+index 00000000..26a43112
+--- /dev/null
++++ b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/dao/LocalConfigDAOLivenessTest.java
+@@ -0,0 +1,41 @@
++package io.mosip.registration.clientmanager.dao;
++
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.times;
++import static org.mockito.Mockito.verify;
++
++import java.util.HashMap;
++import java.util.Map;
++import org.junit.Test;
++
++import io.mosip.registration.clientmanager.entity.LocalPreferences;
++import io.mosip.registration.clientmanager.repository.LocalPreferencesRepository;
++import io.mosip.registration.clientmanager.repository.PermittedLocalConfigRepository;
++
++/** SAJEEV A4: a local preference can never override a server-only liveness setting. */
++public class LocalConfigDAOLivenessTest {
++
++    @Test
++    public void test_modifyConfigurations_refuses_liveness_keys() {
++        LocalPreferencesRepository prefs = mock(LocalPreferencesRepository.class);
++        LocalConfigDAOImpl dao = new LocalConfigDAOImpl(mock(PermittedLocalConfigRepository.class), prefs);
++        Map<String, String> m = new HashMap<>();
++        m.put("mosip.registration.liveness.enabled", "false");
++        m.put("mosip.registration.liveness.passive.threshold", "0");
++        dao.modifyConfigurations(m);
++        verify(prefs, never()).save(any(LocalPreferences.class));
++    }
++
++    @Test
++    public void test_modifyConfigurations_still_saves_other_keys() {
++        LocalPreferencesRepository prefs = mock(LocalPreferencesRepository.class);
++        LocalConfigDAOImpl dao = new LocalConfigDAOImpl(mock(PermittedLocalConfigRepository.class), prefs);
++        Map<String, String> m = new HashMap<>();
++        m.put("mosip.registration.liveness.enabled", "false");
++        m.put("mosip.registration.scan_timeout", "9");
++        dao.modifyConfigurations(m);
++        verify(prefs, times(1)).save(any(LocalPreferences.class));
++    }
++}
+diff --git a/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/FaceAuthLockoutTest.java b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/FaceAuthLockoutTest.java
+new file mode 100644
+index 00000000..6d145ed2
+--- /dev/null
++++ b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/FaceAuthLockoutTest.java
+@@ -0,0 +1,58 @@
++package io.mosip.registration.clientmanager.util;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertFalse;
++import static org.junit.Assert.assertTrue;
++
++import java.util.concurrent.atomic.AtomicLong;
++import org.junit.Test;
++
++public class FaceAuthLockoutTest {
++
++    private final AtomicLong now = new AtomicLong(1000);
++    private final FaceAuthLockout l = new FaceAuthLockout(300_000L, now::get);
++
++    @Test
++    public void test_lock_after_max_failures_and_not_before() {
++        assertFalse(l.recordFailure("u1", 3));
++        assertFalse(l.recordFailure("u1", 3));
++        assertFalse(l.isLocked("u1"));
++        assertTrue(l.recordFailure("u1", 3));
++        assertTrue(l.isLocked("u1"));
++    }
++
++    @Test
++    public void test_lock_is_per_user() {
++        for (int i = 0; i < 3; i++) l.recordFailure("u1", 3);
++        assertTrue(l.isLocked("u1"));
++        assertFalse(l.isLocked("u2"));
++        assertTrue("user ids compare ignoring case and spaces", l.isLocked(" U1 "));
++    }
++
++    @Test
++    public void test_lock_expires_after_window_and_starts_fresh() {
++        for (int i = 0; i < 3; i++) l.recordFailure("u1", 3);
++        now.addAndGet(299_999);
++        assertTrue(l.isLocked("u1"));
++        now.addAndGet(1);
++        assertFalse(l.isLocked("u1"));
++        assertEquals(0, l.failures("u1"));
++        assertFalse(l.recordFailure("u1", 3));
++    }
++
++    @Test
++    public void test_success_clears_counter() {
++        l.recordFailure("u1", 3);
++        l.recordFailure("u1", 3);
++        l.recordSuccess("u1");
++        assertEquals(0, l.failures("u1"));
++        assertFalse(l.recordFailure("u1", 3));
++    }
++
++    @Test
++    public void test_bad_max_falls_back_to_three() {
++        assertFalse(l.recordFailure("u1", 0));
++        assertFalse(l.recordFailure("u1", -5));
++        assertTrue(l.recordFailure("u1", 0));
++    }
++}
 diff --git a/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
 new file mode 100644
-index 00000000..878a3b1a
+index 00000000..ffdf7def
 --- /dev/null
 +++ b/android/clientmanager/src/test/java/io/mosip/registration/clientmanager/util/LivenessSettingsTest.java
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,84 @@
 +package io.mosip.registration.clientmanager.util;
 +
 +import static org.junit.Assert.assertEquals;
@@ -333,6 +923,23 @@ index 00000000..878a3b1a
 +        assertFalse(new LivenessSettings(repo).faceAuthEnabled());
 +        when(repo.getCachedStringGlobalParam(LivenessSettings.FACE_AUTH_ENABLED)).thenReturn("true");
 +        assertTrue(new LivenessSettings(repo).faceAuthEnabled());
++    }
++
++    @Test
++    public void test_local_override_of_liveness_keys_is_ignored() {
++        assertTrue(LivenessSettings.isServerOnlyKey("mosip.registration.liveness.enabled"));
++        assertTrue(LivenessSettings.isServerOnlyKey("  MOSIP.registration.liveness.passive.threshold"));
++        assertFalse(LivenessSettings.isServerOnlyKey("mosip.registration.scan_timeout"));
++        assertFalse(LivenessSettings.isServerOnlyKey(null));
++        java.util.Map<String, String> local = new java.util.HashMap<>();
++        local.put("mosip.registration.liveness.enabled", "false");
++        local.put("mosip.registration.liveness.passive.threshold", "0");
++        local.put("mosip.registration.other", "x");
++        java.util.Map<String, String> kept = LivenessSettings.withoutServerOnlyKeys(local);
++        assertEquals(1, kept.size());
++        assertEquals("x", kept.get("mosip.registration.other"));
++        assertEquals(3, local.size()); // the input is untouched
++        assertTrue(LivenessSettings.withoutServerOnlyKeys(null).isEmpty());
 +    }
 +}
 diff --git a/assets/l10n/app_ar.arb b/assets/l10n/app_ar.arb
@@ -1215,7 +1822,7 @@ index 12ecdf7a..c4302b14 100644
 +  "liveness_face_auth_hint": "கடவுச்சொல் இல்லையா? உங்கள் முகத்தால் அங்கீகரிக்க இதை காலியாக விடுங்கள் (முக அங்கீகாரம் இயக்கப்பட்டிருந்தால்)."
  }
 diff --git a/lib/liveness/liveness_gate.dart b/lib/liveness/liveness_gate.dart
-index 5f8c3a36..75f59ab3 100644
+index 5f8c3a36..36b6468a 100644
 --- a/lib/liveness/liveness_gate.dart
 +++ b/lib/liveness/liveness_gate.dart
 @@ -3,9 +3,9 @@ import 'dart:async';
@@ -1229,21 +1836,53 @@ index 5f8c3a36..75f59ab3 100644
  import 'liveness_texts.g.dart';
  import 'liveness_ui_state.dart';
  
-@@ -23,11 +23,35 @@ class LivenessRetries {
+@@ -23,12 +23,71 @@ class LivenessRetries {
  }
  
  class LivenessGate {
 -  static final LivenessRetries retries = LivenessRetries(3);
-+  static LivenessRetries retries = LivenessRetries(3);
++  /// Failed-attempt counters, one per scope (workflow, or an explicit scope such as 'ONBOARD'). They are not shared, so
++  /// failures at the login screen never block registration capture and the other way round.
++  static final Map<String, LivenessRetries> _counters = {};
++  static int _max = 3;
++
++  /// The counter of one scope (created on first use with the current limit).
++  static LivenessRetries retriesFor(String scope) => _counters.putIfAbsent(scope, () => LivenessRetries(_max));
++
++  /// Test and diagnostics access to the default (resident registration) counter.
++  static LivenessRetries get retries => retriesFor('RESIDENT');
++
++  /// The retry limit (maxRetries global parameter, default 3, never below 1). Existing counters keep their failures.
++  static void setMaxRetries(int? value) {
++    final max = (value == null || value < 1) ? 3 : value;
++    if (max == _max) return;
++    _max = max;
++    final old = Map<String, LivenessRetries>.from(_counters);
++    _counters.clear();
++    old.forEach((k, v) {
++      final n = LivenessRetries(max);
++      for (var i = 0; i < v.failures && i < max; i++) {
++        n.failed();
++      }
++      _counters[k] = n;
++    });
++  }
++
++  /// A new registration or login flow starts: every counter begins at zero.
++  static void startFlow() => _counters.forEach((_, v) => v.reset());
++
++  /// True for the captures that are a real face capture: the face and the exception photo (the SBI is asked for FACE).
++  static bool isFaceCapture(String modality) {
++    final m = modality.replaceAll(' ', '');
++    return m == 'Face' || m == 'Exception';
++  }
 +  static const _enabledKey = 'mosip.registration.liveness.enabled';
 +  static const _maxRetriesKey = 'mosip.registration.liveness.maxRetries';
 +
 +  /// The client's own settings (global parameters): liveness on unless exactly "false"; retries default 3, never below 1.
 +  static Future<void> _loadSettings() async {
 +    try {
-+      final r = int.tryParse((await ProcessSpecApi().getStringValueGlobalParam(_maxRetriesKey)).trim());
-+      final max = (r == null || r < 1) ? 3 : r;
-+      if (max != retries.max) retries = LivenessRetries(max);
++      setMaxRetries(int.tryParse((await ProcessSpecApi().getStringValueGlobalParam(_maxRetriesKey)).trim()));
 +    } catch (_) {
 +      // keep the current limit
 +    }
@@ -1257,15 +1896,110 @@ index 5f8c3a36..75f59ab3 100644
 +    }
 +  }
  
-   /// True when the capture may start. Non-face modalities pass through untouched.
-   static Future<bool> passIfFace(BuildContext context, String modality, {String workflow = 'RESIDENT'}) async {
-     if (modality.replaceAll(' ', '') != 'Face') return true;
+-  /// True when the capture may start. Non-face modalities pass through untouched.
+-  static Future<bool> passIfFace(BuildContext context, String modality, {String workflow = 'RESIDENT'}) async {
+-    if (modality.replaceAll(' ', '') != 'Face') return true;
++  /// True when the capture may start. Non-face modalities pass through untouched. [scope] names the retry counter
++  /// (default: the workflow); operator onboarding uses its own scope so it never shares a counter with login.
++  static Future<bool> passIfFace(BuildContext context, String modality,
++      {String workflow = 'RESIDENT', String? scope}) async {
++    if (!isFaceCapture(modality)) return true;
 +    if (!await _enabled()) return true; // an administrator switched liveness off
 +    await _loadSettings();
 +    if (!context.mounted) return false;
      final lang = _lang(context);
++    final retries = retriesFor(scope ?? workflow);
      if (retries.exhausted) {
        await _info(context, livenessTexts['failure.max_retries']![lang]!);
+       return false;
+@@ -46,7 +105,7 @@ class LivenessGate {
+     return false;
+   }
+ 
+-  static void resetAttempts() => retries.reset();
++  static void resetAttempts([String scope = 'RESIDENT']) => retriesFor(scope).reset();
+ 
+   static String _lang(BuildContext c) {
+     final l = Localizations.localeOf(c).languageCode;
+diff --git a/lib/ui/login_page.dart b/lib/ui/login_page.dart
+index 36097038..d9965e43 100644
+--- a/lib/ui/login_page.dart
++++ b/lib/ui/login_page.dart
+@@ -32,6 +32,7 @@ import 'package:registration_client/utils/app_config.dart';
+ import 'package:registration_client/utils/responsive.dart';
+ import 'package:registration_client/ui/widgets/password_component.dart';
+ import 'package:registration_client/liveness/face_auth_flow.dart';
++import 'package:registration_client/liveness/liveness_gate.dart';
+ import 'package:registration_client/ui/widgets/username_component.dart';
+ import 'package:colorful_progress_indicators/colorful_progress_indicators.dart';
+ import 'package:url_launcher/url_launcher.dart';
+@@ -77,6 +78,7 @@ class _LoginPageState extends State<LoginPage> with WidgetsBindingObserver {
+     connectivityProvider =
+         Provider.of<ConnectivityProvider>(context, listen: false);
+     _initializeAppData();
++    LivenessGate.startFlow(); // a new login screen is a new login flow
+     FaceAuthFlow.enabled().then((v) {
+       if (mounted) setState(() => _faceAuthOn = v);
+     });
+diff --git a/lib/ui/onboard/widgets/operator_biometric_capture_scan_block_view.dart b/lib/ui/onboard/widgets/operator_biometric_capture_scan_block_view.dart
+index d74d2af0..2bb04083 100644
+--- a/lib/ui/onboard/widgets/operator_biometric_capture_scan_block_view.dart
++++ b/lib/ui/onboard/widgets/operator_biometric_capture_scan_block_view.dart
+@@ -15,6 +15,7 @@ import 'package:registration_client/provider/biometric_capture_control_provider.
+ import 'package:registration_client/provider/global_provider.dart';
+ import 'package:registration_client/utils/app_config.dart';
+ import 'package:registration_client/utils/biometrics_utils.dart';
++import 'package:registration_client/liveness/liveness_gate.dart';
+ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+ 
+ import 'package:registration_client/provider/auth_provider.dart';
+@@ -381,6 +382,9 @@ class _OperatorBiometricCaptureScanBlockViewState
+           onPressed: () async {
+             if (biometricAttributeData.exceptions.contains(false)) {
+               List<Uint8List?> tempImageList = [];
++              // SAJEEV A1: the onboarded face becomes the reference template, so it needs liveness like any face capture.
++              if (!await LivenessGate.passIfFace(context, biometricAttributeData.title,
++                  workflow: 'OPERATOR', scope: 'ONBOARD')) return;
+               await BiometricsApi().invokeDiscoverSbi("operatorBiometrics",
+                   biometricAttributeData.title.replaceAll(" ", ""));
+               await BiometricsApi()
+diff --git a/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart b/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart
+index 33745eb7..a1266f49 100644
+--- a/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart
++++ b/lib/ui/process_ui/widgets/biometric_scan_middle_block.dart
+@@ -42,6 +42,12 @@ class BiometricScanMiddleBlock extends StatefulWidget {
+ }
+ 
+ class _BiometricScanMiddleBlockState extends State<BiometricScanMiddleBlock> {
++  @override
++  void initState() {
++    super.initState();
++    LivenessGate.resetAttempts(); // same as the portrait screen: a new capture screen is a new attempt flow
++  }
++
+   listOfImages(List<dynamic> images) {
+     List<Widget> temp = [];
+     for (var e in images) {
+diff --git a/lib/ui/process_ui/widgets/language_selector.dart b/lib/ui/process_ui/widgets/language_selector.dart
+index 28e4445c..2ba5eaec 100644
+--- a/lib/ui/process_ui/widgets/language_selector.dart
++++ b/lib/ui/process_ui/widgets/language_selector.dart
+@@ -5,6 +5,7 @@
+  *
+ */
+ 
++import 'package:registration_client/liveness/liveness_gate.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter_screenutil/flutter_screenutil.dart';
+ 
+@@ -96,6 +97,7 @@ class _LanguageSelectorState extends State<LanguageSelector> {
+       debugPrint("GPS location capture failed: $e");
+     }
+ 
++    LivenessGate.startFlow(); // a new registration flow: liveness retry counters start at zero
+     List<String> langList = _getRegistrationLanguageList();
+     await registrationTaskProvider.startRegistration(
+         langList,
 diff --git a/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart b/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
 index d0060f1a..3df4f56b 100644
 --- a/lib/ui/process_ui/widgets_mobile/biometric_capture_scan_block_portrait.dart
@@ -1278,3 +2012,76 @@ index d0060f1a..3df4f56b 100644
    }
  
    setInitialState() {
+diff --git a/test/liveness/liveness_retries_test.dart b/test/liveness/liveness_retries_test.dart
+index 19d36585..d80bb4e4 100644
+--- a/test/liveness/liveness_retries_test.dart
++++ b/test/liveness/liveness_retries_test.dart
+@@ -1,8 +1,13 @@
+-// SAJEEV #54
++// SAJEEV #54, A1/A2/A8
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:registration_client/liveness/liveness_gate.dart';
+ 
+ void main() {
++  setUp(() {
++    LivenessGate.setMaxRetries(3);
++    LivenessGate.startFlow();
++  });
++
+   test('test_android_retry_limit_enforced', () {
+     final r = LivenessRetries(3);
+     expect(r.exhausted, false);
+@@ -15,4 +20,53 @@ void main() {
+     expect(r.exhausted, false);
+     expect(LivenessGate.retries.max, 3);
+   });
++
++  test('test_retry_counters_are_per_workflow', () {
++    for (var i = 0; i < 3; i++) {
++      LivenessGate.retriesFor('OPERATOR').failed(); // three failed face logins
++    }
++    expect(LivenessGate.retriesFor('OPERATOR').exhausted, true);
++    expect(LivenessGate.retriesFor('RESIDENT').exhausted, false, reason: 'login failures never block registration');
++    expect(LivenessGate.retriesFor('SUPERVISOR').exhausted, false);
++    expect(LivenessGate.retriesFor('ONBOARD').exhausted, false);
++  });
++
++  test('test_new_flow_resets_every_counter', () {
++    for (var i = 0; i < 3; i++) {
++      LivenessGate.retriesFor('RESIDENT').failed();
++      LivenessGate.retriesFor('OPERATOR').failed();
++    }
++    LivenessGate.startFlow();
++    expect(LivenessGate.retriesFor('RESIDENT').exhausted, false);
++    expect(LivenessGate.retriesFor('OPERATOR').exhausted, false);
++    expect(LivenessGate.retriesFor('RESIDENT').failures, 0);
++  });
++
++  test('test_resetAttempts_resets_only_its_scope', () {
++    LivenessGate.retriesFor('RESIDENT').failed();
++    LivenessGate.retriesFor('OPERATOR').failed();
++    LivenessGate.resetAttempts();
++    expect(LivenessGate.retriesFor('RESIDENT').failures, 0);
++    expect(LivenessGate.retriesFor('OPERATOR').failures, 1);
++  });
++
++  test('test_max_retries_comes_from_the_setting_and_keeps_failures', () {
++    LivenessGate.retriesFor('RESIDENT').failed();
++    LivenessGate.setMaxRetries(5);
++    expect(LivenessGate.retriesFor('RESIDENT').max, 5);
++    expect(LivenessGate.retriesFor('RESIDENT').failures, 1);
++    LivenessGate.setMaxRetries(0); // invalid: back to 3
++    expect(LivenessGate.retriesFor('RESIDENT').max, 3);
++    LivenessGate.setMaxRetries(null);
++    expect(LivenessGate.retriesFor('NEW').max, 3);
++  });
++
++  test('test_exception_photo_and_face_are_gated_other_modalities_pass', () {
++    expect(LivenessGate.isFaceCapture('Face'), true);
++    expect(LivenessGate.isFaceCapture('Exception'), true, reason: 'A2: the SBI is asked for FACE');
++    expect(LivenessGate.isFaceCapture('Exception '), true);
++    for (final m in ['Iris', 'LeftHand', 'RightHand', 'Thumbs', 'Fingerprint', '']) {
++      expect(LivenessGate.isFaceCapture(m), false, reason: m);
++    }
++  });
+ }
