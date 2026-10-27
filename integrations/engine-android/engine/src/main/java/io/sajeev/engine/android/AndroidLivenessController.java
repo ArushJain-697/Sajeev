@@ -108,6 +108,12 @@ public final class AndroidLivenessController {
         if (engine == null) {
             AndroidImageDecoder.install();
             File models = new File(context.getFilesDir(), "models");
+            // A3: first start: copy the bundled model set (assets/sajeev-models) if there is one; never a download
+            try {
+                ModelProvisioner.provision(rel -> context.getAssets().open(ModelProvisioner.ASSET_DIR + "/" + rel), models);
+            } catch (java.io.IOException e) {
+                android.util.Log.e("Sajeev", "Model provisioning failed; the engine stays unavailable", e);
+            }
             // models load only after the signed manifest verifies (ECDSA, bundled trust root); an unsigned or changed model is refused
             engine = new LivenessEngine(EngineModels.loadVerified(models.toPath(), EngineModels.bundledTrustRoot(), 0), loadConfig(),
                     EngineSettings.defaults(), new AuditLog(System::currentTimeMillis), new LivenessMetrics());
