@@ -23,8 +23,16 @@ public final class ExtractEarTrace {
     }
 
     public static void main(String[] a) throws Exception {
-        int fps = a.length > 3 ? Integer.parseInt(a[3]) : 30;
         Path tmp = Files.createTempDirectory("sajeev-ear");
+        try {
+            run(a, tmp);
+        } finally {
+            RunEval.deleteTree(tmp); // the frames show consented faces: they never stay on disk
+        }
+    }
+
+    private static void run(String[] a, Path tmp) throws Exception {
+        int fps = a.length > 3 ? Integer.parseInt(a[3]) : 30;
         Process p = new ProcessBuilder("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", a[1], "-vf", "fps=" + fps, "-q:v", "3",
                 tmp.resolve("%04d.jpg").toString()).inheritIO().start();
         if (p.waitFor() != 0) {

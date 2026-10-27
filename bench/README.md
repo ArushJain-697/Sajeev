@@ -9,6 +9,8 @@ bench/run.sh --clip <folder of .jpg | file.jpg | file.mjpeg> [--fps 10] [--workf
 
 - Needs the model directory: `SAJEEV_MODELS=<dir>` (or `--models`). When `../tools-local` exists, `run.sh` uses its Java, Maven and models.
 - Frame arrival times are synthetic (frame index divided by `--fps`), so a run is repeatable.
+- Frames are fed one at a time and the bench waits until the engine is idle before the next one (no wall-clock pacing, no dropped frames, no load shedding, fixed challenge seed), so the same clip gives the same report on every run.
+- A single `.jpg` (repeated) or a folder of identical frames is a frozen stream: the engine ends it as `ATTACK_SUSPECTED` / `frozen_stream`, because a real camera always shows sensor noise.
 - `--capture` runs the Binding check of a capture image against what was seen live.
 - Exit code 0 = a verdict was printed; 2 = bad arguments; 3 = no decision before the clip ended.
 

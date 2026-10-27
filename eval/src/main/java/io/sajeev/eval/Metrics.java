@@ -131,6 +131,117 @@ public final class Metrics {
         return sb.append('}').toString();
     }
 
+    /** The verdict tiers a presentation can end in, in report order (NO_DECISION = the engine gave no verdict for the clip). */
+    static final String[] TIERS = {"LIVE_PASSIVE", "LIVE_ACTIVE", "ACTIVE_REQUIRED", "CANNOT_JUDGE", "NO_DECISION", "ATTACK_SUSPECTED",
+        "LIMITED"};
+
+    /** @return true when the engine ended this presentation in a way that is NOT a positive detection of an attack */
+    static boolean notDefended(Presentation p) {
+        return p.accepted || !"ATTACK_SUSPECTED".equals(p.tier);
+    }
+
+    /** @return group name (bona, then each species) to tier to count; every tier is present, even with 0 */
+    static Map<String, Map<String, Integer>> tierCounts(List<Presentation> ps) {
+        Map<String, Map<String, Integer>> out = new TreeMap<>((a, b) -> "bona".equals(a) ? ("bona".equals(b) ? 0 : -1)
+                : "bona".equals(b) ? 1 : a.compareTo(b));
+        for (Presentation p : ps) {
+            Map<String, Integer> m = out.get(p.species);
+            if (m == null) {
+                m = new java.util.LinkedHashMap<>();
+                for (String t : TIERS) {
+                    m.put(t, 0);
+                }
+                out.put(p.species, m);
+            }
+            m.merge(p.tier, 1, Integer::sum);
+        }
+        return out;
+    }
+
+    /** @return the tier histogram and the "not defended" counts as plain text lines, for the console */
+    public static String histogramText(List<Presentation> ps) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Map<String, Integer>> e : tierCounts(ps).entrySet()) {
+            int n = 0;
+            for (int c : e.getValue().values()) {
+                n += c;
+            }
+            sb.append("tiers [").append(e.getKey()).append("] n=").append(n).append(':');
+            for (Map.Entry<String, Integer> t : e.getValue().entrySet()) {
+                sb.append(' ').append(t.getKey()).append('=').append(t.getValue());
+            }
+            int bad = 0;
+            for (Presentation p : ps) {
+                if (p.species.equals(e.getKey()) && (p.isBonaFide() ? !p.accepted : notDefended(p))) {
+                    bad++;
+                }
+            }
+            sb.append("  ->  ").append("bona".equals(e.getKey()) ? "BPCER failures (everything not accepted) " : "NOT DEFENDED (accepted + CANNOT_JUDGE + NO_DECISION + ACTIVE_REQUIRED + LIMITED) ")
+                    .append(bad).append('/').append(n).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private static String tierJson(Map<String, Map<String, Integer>> counts) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<String, Map<String, Integer>> e : counts.entrySet()) {
+            sb.append(first ? "" : ",").append('"').append(e.getKey()).append("\":{");
+            boolean f2 = true;
+            for (Map.Entry<String, Integer> t : e.getValue().entrySet()) {
+                sb.append(f2 ? "" : ",").append('"').append(t.getKey()).append("\":").append(t.getValue());
+                f2 = false;
+            }
+            sb.append('}');
+            first = false;
+        }
+        return sb.append('}').toString();
+    }
+
+    /** Attack species: "not defended" = anything but a positive ATTACK_SUSPECTED. Bona fide: every presentation that was not accepted. */
+    private static String notDefendedJson(List<Presentation> ps) {
+        TreeSet<String> names = new TreeSet<>();
+        for (Presentation p : ps) {
+            if (!p.isBonaFide()) {
+                names.add(p.species);
+            }
+        }
+        StringBuilder sb = new StringBuilder("{\"definition\":\"attack presentations NOT defended = accepted, CANNOT_JUDGE, NO_DECISION, "
+                + "ACTIVE_REQUIRED (challenge not passed or timed out) or LIMITED: only ATTACK_SUSPECTED counts as defended; "
+                + "bona fide presentations not accepted are all BPCER failures\",\"by_species\":{");
+        boolean first = true;
+        int allN = 0;
+        int allEv = 0;
+        for (String s : names) {
+            int n = 0;
+            int ev = 0;
+            for (Presentation p : ps) {
+                if (s.equals(p.species)) {
+                    n++;
+                    if (notDefended(p)) {
+                        ev++;
+                    }
+                }
+            }
+            sb.append(first ? "" : ",").append('"').append(s).append("\":").append(rate(ev, n));
+            first = false;
+            allN += n;
+            allEv += ev;
+        }
+        sb.append("},\"all_attacks\":").append(rate(allEv, allN));
+        int bn = 0;
+        int bev = 0;
+        for (Presentation p : ps) {
+            if (p.isBonaFide()) {
+                bn++;
+                if (!p.accepted) {
+                    bev++;
+                }
+            }
+        }
+        return sb.append(",\"bona_fide_not_accepted\":").append(rate(bev, bn)).append('}').toString();
+    }
+
     /**
      * @param ps all presentations (one per clip)
      * @param threshold passive threshold used for the ablation re-decisions
@@ -142,6 +253,8 @@ public final class Metrics {
         sb.append("\"unit\":\"one presentation (one clip); frames inside a clip are not counted separately\"");
         sb.append(",\"presentations\":").append(ps.size());
         sb.append(",\"engine\":").append(block(ps, p -> p.accepted));
+        sb.append(",\"tier_histogram\":").append(tierJson(tierCounts(ps)));
+        sb.append(",\"not_defended\":").append(notDefendedJson(ps));
         sb.append(",\"by_subject\":").append(group(ps, p -> p.subject));
         sb.append(",\"by_device\":").append(group(ps, p -> p.device));
         sb.append(",\"baselines\":{");

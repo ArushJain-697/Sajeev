@@ -79,11 +79,13 @@ class BindingTest {
     @Test
     void test_ring_keeps_only_the_best_observations() {
         Binding b = new Binding(0.363, 0.08, 2000, 2);
-        b.observeLive(new float[] {0, 1, 0, 0}, GEOM, 0.1); // poor quality, dropped when better ones arrive
+        // poor quality, dropped when better ones arrive. It is the same person as LIVE (cosine 0.8): since the session now
+        // refuses observations of a different person, the old vector {0,1,0,0} would have made this an identity change.
+        b.observeLive(new float[] {0.8f, 0.6f, 0, 0}, GEOM, 0.1);
         b.observeLive(LIVE, GEOM, 0.9);
         b.observeLive(LIVE, GEOM, 0.8);
         b.liveVerdictAt(0L);
-        // the poor observation (which would match the "other" face) was dropped, so "other" is rejected
+        // the poor observation (cosine 0.6 to "other") was dropped, so "other" (cosine 0 to LIVE) is rejected
         assertEquals(Binding.Verdict.CAPTURE_UNBOUND, b.bind(1, new float[] {0, 1, 0, 0}, GEOM, SECOND, 5000).verdict());
     }
 }

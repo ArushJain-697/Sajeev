@@ -101,6 +101,21 @@ public final class EngineSession implements LivenessSession {
     private long processed;
     private final LoadShedder shedder = new LoadShedder(8);
     private long lastFrameWallNanos = -1; // worker thread only
+    private final io.sajeev.face.StreamMotion motion;
+    private long firstUsableArrival = -1; // worker thread only
+
+    // ---- admission of frames (caller's thread) ----
+    /** Largest arrival time we accept in either direction; keeps every difference of two accepted times inside a long. */
+    private static final long TIME_LIMIT = 1L << 62;
+    private final Object arrivalLock = new Object();
+    private boolean haveLastArrival;
+    private long lastAcceptedArrival;
+    private int rejectedTimestamps;
+    /** Frames accepted by onFrame and not yet fully processed (queued or being processed). */
+    private final java.util.concurrent.atomic.AtomicInteger pending = new java.util.concurrent.atomic.AtomicInteger();
+    private final Object stateLock = new Object();
+    private final java.util.concurrent.atomic.AtomicBoolean slotHeld = new java.util.concurrent.atomic.AtomicBoolean();
+    private boolean captureUsed; // guarded by this (checkCapture is synchronized)
 
     private ChallengeSession challenge;
     private ActionDetectors.Baseline baseline;
@@ -125,8 +140,30 @@ public final class EngineSession implements LivenessSession {
         this.binding = new Binding(parse(engine.config.value("binding.embedding.threshold", name()), 0.363),
                 parse(engine.config.value("binding.geometry.tolerance", name()), st.geometryTolerance),
                 (long) parse(engine.config.value("binding.windowMarginMs", name()), 2000), 5);
+        this.motion = new io.sajeev.face.StreamMotion(Math.max(1, st.passiveFrames - 1));
+        if (!engine.tryAcquireSlot()) {
+            // too many sessions at once: this one ends at once, fail closed, and no thread is started
+            verdict = new Verdict(Verdict.Tier.CANNOT_JUDGE, ErrorState.ENGINE_ERROR, "too_many_sessions");
+            state = State.DONE;
+            running = false;
+            ended = true;
+            return;
+        }
+        slotHeld.set(true);
         audit(LivenessAuditEvent.REG_LIVENESS_START, Collections.emptyMap());
-        engine.workers.execute(this::run);
+        try {
+            engine.workers.execute(this::run);
+        } catch (RuntimeException e) { // the executor refused (engine closed)
+            finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.ENGINE_ERROR, "engine_closed");
+            ended = true;
+            releaseSlot();
+        }
+    }
+
+    private void releaseSlot() {
+        if (slotHeld.compareAndSet(true, false)) {
+            engine.releaseSlot();
+        }
     }
 
     private String name() {
@@ -149,10 +186,83 @@ public final class EngineSession implements LivenessSession {
         if (!running) {
             return;
         }
-        recordDelivery(frame.arrivalNanos());
-        while (!queue.offer(frame)) {
-            queue.poll();
+        Frame f = admit(frame);
+        if (f == null) {
+            return;
         }
+        recordDelivery(f.arrivalNanos());
+        pending.incrementAndGet();
+        while (!queue.offer(f)) {
+            if (queue.poll() != null) {
+                pending.decrementAndGet();
+            }
+        }
+    }
+
+    /**
+     * The arrival time is the caller's claim, so it is checked: it must be inside the usable range and strictly later than the
+     * previous accepted frame (a repeated or backward time would defeat the frame-rate guard); an absurd jump is clamped.
+     * @return the frame to queue (possibly with a clamped time), or null when it was refused
+     */
+    private Frame admit(Frame frame) {
+        long t = frame.arrivalNanos();
+        Frame out = frame;
+        boolean bad = t > TIME_LIMIT || t < -TIME_LIMIT;
+        boolean tooMany = false;
+        synchronized (arrivalLock) {
+            if (!bad && haveLastArrival) {
+                if (t <= lastAcceptedArrival) {
+                    bad = true;
+                } else if (t - lastAcceptedArrival > st.maxArrivalGapMillis * 1_000_000L) {
+                    t = lastAcceptedArrival + st.maxArrivalGapMillis * 1_000_000L;
+                    out = new Frame(frame.jpeg(), t, frame.sequence());
+                }
+            }
+            if (bad) {
+                rejectedTimestamps++;
+                tooMany = rejectedTimestamps >= st.maxRejectedTimestamps;
+            } else {
+                haveLastArrival = true;
+                lastAcceptedArrival = t;
+            }
+        }
+        if (bad) {
+            lastTrackerError = ErrorState.INVALID_FRAME_DATA;
+            if (tooMany) {
+                finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.INVALID_FRAME_DATA, "invalid_timestamps");
+            }
+            return null;
+        }
+        return out;
+    }
+
+    /**
+     * Wait until every frame given to {@link #onFrame} has been processed (or the session has ended and its worker has stopped).
+     * Evaluation and the bench call this after each frame, so no frame is ever dropped and the verdict depends only on the frames.
+     * @param timeoutMillis the longest time to wait
+     * @return true when idle or ended, false on timeout
+     */
+    public boolean awaitIdle(long timeoutMillis) {
+        long end = System.nanoTime() + timeoutMillis * 1_000_000L;
+        while (true) {
+            State s = state;
+            boolean terminal = s == State.DONE || s == State.ABORTED;
+            if (terminal ? ended : pending.get() <= 0) {
+                return true;
+            }
+            if (System.nanoTime() - end >= 0) {
+                return false;
+            }
+            java.util.concurrent.locks.LockSupport.parkNanos(200_000L);
+        }
+    }
+
+    private void clearQueue() {
+        int n = 0;
+        while (queue.poll() != null) {
+            n++;
+        }
+        pending.addAndGet(-n);
     }
 
     private static final long RATE_WINDOW_NANOS = 2_000_000_000L;
@@ -185,12 +295,15 @@ public final class EngineSession implements LivenessSession {
 
     @Override
     public void abort() {
-        if (state != State.DONE && state != State.ABORTED) {
-            verdict = new Verdict(Verdict.Tier.CANNOT_JUDGE, null, "aborted");
-            state = State.ABORTED;
+        synchronized (stateLock) { // one lock with finish(): the verdict and the state can never disagree
+            if (state != State.DONE && state != State.ABORTED) {
+                verdict = new Verdict(Verdict.Tier.CANNOT_JUDGE, null, "aborted");
+                state = State.ABORTED;
+                binding.clearVerdict(); // nothing can be bound to an aborted session
+            }
+            running = false;
         }
-        running = false;
-        queue.clear();
+        clearQueue();
     }
 
     /** @return the challenge the client should show now, or null when there is none */
@@ -261,6 +374,16 @@ public final class EngineSession implements LivenessSession {
      * @return the result; CAPTURE_UNBOUND when there was no live verdict, more or fewer than one face, or any check failed
      */
     public synchronized Binding.Result checkCapture(byte[] captureJpeg, long arrivalNanos, long captureTimeoutMillis) {
+        Verdict v = verdict;
+        boolean live = state == State.DONE && v != null
+                && (v.tier() == Verdict.Tier.LIVE_PASSIVE || v.tier() == Verdict.Tier.LIVE_ACTIVE);
+        if (!live) {
+            return refuseCapture("no_live_verdict"); // not consumed: the live verdict may still come
+        }
+        if (captureUsed) {
+            return refuseCapture("already_used"); // one live verdict stores one capture; the first result stays
+        }
+        captureUsed = true;
         Binding.Result r;
         try {
             PixelImage img = ImageCodec.decode(captureJpeg);
@@ -272,7 +395,7 @@ public final class EngineSession implements LivenessSession {
             } else {
                 r = binding.bind(faces.size(), new float[0], new double[0], arrivalNanos, captureTimeoutMillis);
             }
-        } catch (Exception e) {
+        } catch (Throwable e) { // includes OutOfMemoryError and StackOverflowError: fail closed, never throw to the caller
             r = binding.bind(0, new float[0], new double[0], arrivalNanos, captureTimeoutMillis);
         }
         bindingResult = r;
@@ -281,6 +404,14 @@ public final class EngineSession implements LivenessSession {
         a.put("failed", String.valueOf(r.failedChecks().size()));
         audit(LivenessAuditEvent.REG_LIVENESS_BINDING, a);
         return r;
+    }
+
+    private Binding.Result refuseCapture(String why) {
+        Map<String, String> a = new LinkedHashMap<>();
+        a.put("result", Binding.Verdict.CAPTURE_UNBOUND.name());
+        a.put("failed", "1");
+        audit(LivenessAuditEvent.REG_LIVENESS_BINDING, a);
+        return Binding.Result.unbound(why);
     }
 
     /** @return how this attempt ended for the policy engine, or null while it is still open (no verdict, or a live verdict waiting for its capture) */
@@ -319,7 +450,8 @@ public final class EngineSession implements LivenessSession {
             while (running && state != State.DONE && state != State.ABORTED) {
                 Frame f = queue.poll(50, TimeUnit.MILLISECONDS);
                 if (f == null) {
-                    if (lastFrameWallNanos > 0 && System.nanoTime() - lastFrameWallNanos > st.streamStallMillis * 1_000_000L) {
+                    if (!st.deterministic && lastFrameWallNanos > 0
+                            && System.nanoTime() - lastFrameWallNanos > st.streamStallMillis * 1_000_000L) {
                         // frames stopped (unplugged, crashed device): end the session instead of waiting for ever
                         finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.DEVICE_DISCONNECTED, "stream_stalled");
                     }
@@ -334,8 +466,10 @@ public final class EngineSession implements LivenessSession {
                     process(f);
                 } catch (InterruptedException e) {
                     throw e;
-                } catch (Exception e) {
+                } catch (Throwable e) { // OutOfMemoryError, StackOverflowError, native-library errors: fail closed, never hang
                     finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.ENGINE_ERROR, "engine_error:" + e.getClass().getSimpleName());
+                } finally {
+                    pending.decrementAndGet();
                 }
                 double ms = (System.nanoTime() - t0) / 1e6;
                 avgProcessingMs = processed == 0 ? ms : 0.8 * avgProcessingMs + 0.2 * ms;
@@ -343,14 +477,19 @@ public final class EngineSession implements LivenessSession {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        } catch (Throwable e) {
+            finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.ENGINE_ERROR, "engine_error:" + e.getClass().getSimpleName());
         } finally {
+            // whatever ended the worker, the session must not stay open without a verdict
+            finish(Verdict.Tier.CANNOT_JUDGE, ErrorState.ENGINE_ERROR, "worker_ended");
             release();
             ended = true;
+            releaseSlot();
         }
     }
 
     private void release() {
-        queue.clear();
+        clearQueue();
         usableFrames.clear();
         usableLandmarks.clear();
         usableFeatures.clear();
@@ -398,6 +537,10 @@ public final class EngineSession implements LivenessSession {
         lastTrackerError = null;
         float[][] lm = engine.models.landmarks.landmarks(img, ts.face());
         FrameFeatures ff = features(f, lm);
+        motion.observe(img);
+        if (firstUsableArrival < 0) {
+            firstUsableArrival = f.arrivalNanos();
+        }
         usableCount++;
         if (usableCount % Math.max(1, st.bindingEveryNth) == 0 || usableCount == 1) {
             float[] emb = engine.models.sface.embed(FaceAlignment.align(img, lm));
@@ -414,7 +557,14 @@ public final class EngineSession implements LivenessSession {
         lastFace = ts.face();
         if (state == State.PASSIVE) {
             if (usableFrames.size() >= st.passiveFrames) {
-                runPassive(f);
+                if (motion.frozen(st.frozenMaxMeanAbsDiff, st.frozenMinPairs)) {
+                    // a real camera always shows sensor noise: a picture that never changes is a replayed still
+                    finish(Verdict.Tier.ATTACK_SUSPECTED, ErrorState.PAD_FAIL, "frozen_stream");
+                } else if (f.arrivalNanos() - firstUsableArrival < st.minPassiveMillis * 1_000_000L) {
+                    checkPassiveTimeout(f); // not watched long enough yet: no passive pass this early
+                } else {
+                    runPassive(f);
+                }
             } else {
                 checkPassiveTimeout(f);
             }
@@ -490,7 +640,6 @@ public final class EngineSession implements LivenessSession {
         audit(LivenessAuditEvent.REG_LIVENESS_PASSIVE_RESULT, a);
         switch (g.outcome()) {
             case PASSIVE_PASS:
-                binding.liveVerdictAt(System.nanoTime());
                 finish(Verdict.Tier.LIVE_PASSIVE, null, "passive_pass");
                 break;
             case PAD_FAIL:
@@ -516,7 +665,7 @@ public final class EngineSession implements LivenessSession {
             pool.add(ChallengeType.valueOf(t.trim()));
         }
         long timeout = Long.parseLong(engine.config.value("active.challengeTimeoutMs", name()));
-        ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(BLINK_MIN_FPS, 3.0, new SecureRandom()), pool,
+        ChallengeEngine ce = new ChallengeEngine(new ChallengePlanner(BLINK_MIN_FPS, 3.0, challengeRandom()), pool,
                 policy.minChallenges(), timeout);
         challenge = ce.newAttempt(measuredFps());
         if (challenge == null) {
@@ -543,6 +692,20 @@ public final class EngineSession implements LivenessSession {
         nextPrompt(f);
     }
 
+    /** A SecureRandom; in evaluation mode one with a fixed seed, so the same frames always draw the same challenges. */
+    private SecureRandom challengeRandom() {
+        if (st.deterministic) {
+            try {
+                SecureRandom r = SecureRandom.getInstance("SHA1PRNG");
+                r.setSeed(42L);
+                return r;
+            } catch (java.security.NoSuchAlgorithmException e) {
+                // fall through to the normal generator
+            }
+        }
+        return new SecureRandom();
+    }
+
     private void nextPrompt(Frame f) {
         ChallengeType c = challenge.current();
         currentChallenge = c;
@@ -563,7 +726,7 @@ public final class EngineSession implements LivenessSession {
         ChallengeSession.Outcome o = challenge.onFrame(f.sequence(), f.arrivalNanos(), detected);
         LoadShedder.Plan plan = shedder.plan(queue.size(), avgProcessingMs,
                 measuredFps() > 0 ? 1000.0 / measuredFps() : 100.0, true);
-        boolean runCnn = plan.cnnEveryNth() > 0 && processed % plan.cnnEveryNth() == 0;
+        boolean runCnn = st.deterministic || (plan.cnnEveryNth() > 0 && processed % plan.cnnEveryNth() == 0);
         if (reevaluator.onFrame(f, runCnn) == ChallengeReevaluator.Status.PAD_FAIL) {
             finish(Verdict.Tier.ATTACK_SUSPECTED, ErrorState.PAD_FAIL, "attack_during_challenge");
             return;
@@ -573,7 +736,6 @@ public final class EngineSession implements LivenessSession {
         } else if (o == ChallengeSession.Outcome.ACTIVE_PASS) {
             ChallengeReevaluator.Finish fin = reevaluator.finish();
             if (fin == ChallengeReevaluator.Finish.OK) {
-                binding.liveVerdictAt(System.nanoTime());
                 finish(Verdict.Tier.LIVE_ACTIVE, null, "active_pass");
             } else if (fin == ChallengeReevaluator.Finish.PAD_FAIL) {
                 finish(Verdict.Tier.ATTACK_SUSPECTED, ErrorState.PAD_FAIL, "attack_during_challenge");
@@ -628,12 +790,18 @@ public final class EngineSession implements LivenessSession {
     // ------------------------------------------------------------------ end
 
     private void finish(Verdict.Tier tier, ErrorState error, String reason) {
-        if (state == State.DONE || state == State.ABORTED) {
-            return;
+        synchronized (stateLock) {
+            if (state == State.DONE || state == State.ABORTED) {
+                return;
+            }
+            if (tier == Verdict.Tier.LIVE_PASSIVE || tier == Verdict.Tier.LIVE_ACTIVE) {
+                binding.liveVerdictAt(System.nanoTime()); // set under the same lock as the verdict, so an abort cannot leave it behind
+            }
+            verdict = new Verdict(tier, error, reason);
+            state = State.DONE;
+            currentChallenge = null;
+            running = false;
         }
-        verdict = new Verdict(tier, error, reason);
-        state = State.DONE;
-        currentChallenge = null;
         long ms = System.currentTimeMillis() - startedAtMillis;
         engine.metrics.recordAttempt(workflow, ms, tier == Verdict.Tier.LIVE_PASSIVE || tier == Verdict.Tier.LIVE_ACTIVE, false);
         Map<String, String> a = new LinkedHashMap<>();
@@ -656,6 +824,11 @@ public final class EngineSession implements LivenessSession {
     /** For the Bench: the passive votes of the last passive run, by voter name. */
     public Map<String, Vote> passiveVotes() {
         return Collections.unmodifiableMap(new LinkedHashMap<>(passiveVotes));
+    }
+
+    /** Test hook only: end the session with this verdict as if the pipeline had decided it. */
+    void endForTest(Verdict.Tier tier, ErrorState error, String reason) {
+        finish(tier, error, reason);
     }
 
     /** For tests: the worker has ended and released its frames. */

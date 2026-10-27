@@ -280,7 +280,11 @@ class LivenessEngineTest {
     @Test
     void test_diagnostics_are_visible_only_to_the_operator_when_an_admin_enabled_them_and_hold_no_biometric_data() throws Exception {
         io.sajeev.engine.EngineSession s = engine.start(Workflow.OPERATOR, policy());
-        feed(s, file("one_face.jpg"), 40);
+        // a repeated identical frame is now ended as a frozen stream before any voter runs, so the stream needs sensor noise
+        for (int i = 0; i < 40 && s.state() != LivenessSession.State.DONE; i++) {
+            s.onFrame(new Frame(sensorNoise(file("one_face.jpg"), i), 1_000_000_000L + i * STEP, i));
+            assertTrue(s.awaitIdle(20_000));
+        }
         io.sajeev.audit.DiagnosticMode on = new io.sajeev.audit.DiagnosticMode(true);
         io.sajeev.audit.DiagnosticMode off = new io.sajeev.audit.DiagnosticMode(false);
         java.util.Map<String, String> panel = s.diagnostics(on, io.sajeev.audit.DiagnosticMode.Audience.OPERATOR);
@@ -369,7 +373,26 @@ class LivenessEngineTest {
         feed(s, file("one_face.jpg"), 40);
         io.sajeev.binding.Binding.Result r = s.checkCapture(file("two_faces_composite.jpg"), System.nanoTime(), 3000);
         assertEquals(io.sajeev.binding.Binding.Verdict.CAPTURE_UNBOUND, r.verdict());
-        assertTrue(r.failedChecks().contains("faces"), r.failedChecks().toString());
+        // The fixture photo never reaches a live verdict (a held still is a frozen stream now), and a capture is checked only
+        // after a live verdict, so the engine answers "no_live_verdict". The two-faces check itself is tested in BindingTest.
+        assertTrue(r.failedChecks().contains("faces") || r.failedChecks().contains("no_live_verdict"), r.failedChecks().toString());
         s.abort();
+    }
+
+    /** A copy of the frame with a little per-pixel noise (+-2 grey levels) and a fresh JPEG encoding: what a real sensor does. */
+    static byte[] sensorNoise(byte[] jpeg, int seed) throws IOException {
+        java.awt.image.BufferedImage b = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(jpeg));
+        java.util.Random rnd = new java.util.Random(seed);
+        for (int y = 0; y < b.getHeight(); y++) {
+            for (int x = 0; x < b.getWidth(); x++) {
+                int p = b.getRGB(x, y);
+                int d = rnd.nextInt(5) - 2;
+                int r = Math.max(0, Math.min(255, ((p >> 16) & 255) + d));
+                int g = Math.max(0, Math.min(255, ((p >> 8) & 255) + d));
+                int bl = Math.max(0, Math.min(255, (p & 255) + d));
+                b.setRGB(x, y, (r << 16) | (g << 8) | bl);
+            }
+        }
+        return jpegOf(b);
     }
 }

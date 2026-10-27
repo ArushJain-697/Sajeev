@@ -92,8 +92,10 @@ public final class Bench {
             return 2;
         }
         long step = (long) (1_000_000_000.0 / fps);
+        EngineSettings settings = EngineSettings.defaults();
+        settings.deterministic = true; // no load shedding, no wall-clock stall timer, fixed challenge seed: repeatable verdicts
         try (LivenessEngine engine = new LivenessEngine(new EngineModels(Paths.get(models)), Config.load(new Properties()),
-                EngineSettings.defaults(), new AuditLog(System::currentTimeMillis), new LivenessMetrics())) {
+                settings, new AuditLog(System::currentTimeMillis), new LivenessMetrics())) {
             EngineSession s = engine.start(wf, new PolicyConfig(0.80, 2, 3));
             int fed = 0;
             long t0 = 1_000_000_000L;
@@ -103,12 +105,11 @@ public final class Bench {
                 }
                 s.onFrame(new Frame(j, t0 + fed * step, fed));
                 fed++;
-                Thread.sleep(15);
+                if (!s.awaitIdle(120_000)) { // one frame at a time: no wall-clock pacing, no frame is ever dropped
+                    break;
+                }
             }
-            long end = System.currentTimeMillis() + 8_000; // the clip is over; give the worker time to drain
-            while (s.verdict() == null && System.currentTimeMillis() < end) {
-                Thread.sleep(50);
-            }
+            s.awaitIdle(120_000); // the clip is over; the engine has finished every frame it was given
             out.println("clip: " + clip + " (" + jpegs.size() + " frames available, " + fed + " fed)");
             out.printf("measured fps: %.2f (replay rate of the clip, synthetic frame times)%n", fps);
             Verdict v = s.verdict();

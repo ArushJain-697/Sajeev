@@ -1,6 +1,8 @@
 // #60 (WS4) | Bible §11 | run_eval: run the real engine on every clip of a manifest and write metrics JSON. Java 11 only.
 // Usage: run_eval --manifest <manifest.csv> --clips <dir> --models <dir> --out <metrics.json> [--threshold 0.80] [--min-live 3]
 // A clip is an .mp4 (frames taken with ffmpeg at the manifest fps) or a folder of .jpg frames. One clip = one presentation.
+// Reproducible: frames are fed ONE AT A TIME and the run waits until the engine is idle before the next one (no wall-clock pacing,
+// no dropped frames, no load shedding, fixed challenge seed), so the same clip gives the same verdict on every run and machine.
 package io.sajeev.eval;
 
 import io.sajeev.api.Frame;
@@ -34,6 +36,9 @@ import java.util.stream.Stream;
 /** Command-line evaluation. */
 public final class RunEval {
 
+    /** How long one frame may take before the clip is given up (a stuck engine must not hang the evaluation). */
+    private static final long FRAME_TIMEOUT_MS = 120_000;
+
     private RunEval() {
     }
 
@@ -65,9 +70,14 @@ public final class RunEval {
         }
         String configHash = null;
         if (heldout) {
-            // the held-out set is evaluated only through the gate (HELDOUT_PROTOCOL section 4)
+            // the held-out set is evaluated only through the gate (HELDOUT_PROTOCOL section 4), and only from a clean tree
             try {
-                configHash = FreezeHash.compute(Paths.get(models), commit());
+                String state = SourceState.describe(Paths.get(evalDir).toAbsolutePath().getParent());
+                if (!SourceState.isClean(state)) {
+                    throw new HeldOutGate.Refused("the engine sources have uncommitted changes (or git cannot be read): " + state
+                            + ". Commit first; the frozen hash must describe exactly the code that runs.");
+                }
+                configHash = FreezeHash.compute(Paths.get(models), state);
                 HeldOutGate.check(Paths.get(evalDir), configHash, rerun);
             } catch (HeldOutGate.Refused r) {
                 System.err.println("REFUSED: " + r.getMessage());
@@ -82,30 +92,27 @@ public final class RunEval {
             System.exit(2);
         }
         List<Presentation> ps = new ArrayList<>();
+        EngineSettings settings = EngineSettings.defaults();
+        settings.deterministic = true; // no load shedding, no wall-clock stall timer, fixed challenge seed
+        List<String[]> rows = readManifest(Paths.get(manifest));
         try (LivenessEngine engine = new LivenessEngine(new EngineModels(Paths.get(models)), Config.load(new Properties()),
-                EngineSettings.defaults(), new AuditLog(System::currentTimeMillis), new LivenessMetrics())) {
-            for (String[] row : readManifest(Paths.get(manifest))) {
+                settings, new AuditLog(System::currentTimeMillis), new LivenessMetrics())) {
+            for (String[] row : rows) {
                 Presentation done = run(engine, Paths.get(clips), row);
                 System.out.println("clip " + done.file + " [" + done.species + "] -> " + done.tier + (done.accepted ? " (accepted)" : "")
                         + " votes " + done.voteLabels);
                 ps.add(done);
             }
         }
+        if (ps.size() != rows.size()) {
+            throw new IllegalStateException("manifest has " + rows.size() + " rows but " + ps.size() + " presentations were run");
+        }
         Files.write(Paths.get(out), Metrics.toJson(ps, threshold, minLive).getBytes(StandardCharsets.UTF_8));
         if (heldout) {
             Files.write(Paths.get(evalDir, "HELDOUT_REPORT.md"), HeldOutReport.markdown(ps, configHash).getBytes(StandardCharsets.UTF_8));
         }
+        System.out.print(Metrics.histogramText(ps));
         System.out.println("wrote " + out + " for " + ps.size() + " presentations");
-    }
-
-    private static String commit() {
-        try {
-            Process p = new ProcessBuilder("git", "rev-parse", "HEAD").redirectErrorStream(true).start();
-            String h = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            return p.waitFor() == 0 ? h : "unknown";
-        } catch (IOException | InterruptedException e) {
-            return "unknown";
-        }
     }
 
     /** @return the rows (file, species, subject, device, fps) of a manifest.csv written by eval/ingest.sh */
@@ -113,58 +120,109 @@ public final class RunEval {
         List<String> lines = Files.readAllLines(manifest, StandardCharsets.UTF_8);
         List<String[]> rows = new ArrayList<>();
         for (int i = 1; i < lines.size(); i++) {
-            String[] c = lines.get(i).split(",");
-            if (c.length >= 8) {
-                rows.add(new String[] {c[0], c[5], c[3], c[4], c[6]});
+            if (lines.get(i).trim().isEmpty()) {
+                continue;
             }
+            String[] c = lines.get(i).split(",");
+            if (c.length < 8) {
+                // a dropped row would vanish from numerator and denominator alike: refuse instead
+                throw new IOException("manifest line " + (i + 1) + " has " + c.length + " fields, expected 8: " + lines.get(i));
+            }
+            rows.add(new String[] {c[0], c[5], c[3], c[4], c[6]});
         }
         rows.sort(Comparator.comparing(r -> r[0]));
         return rows;
     }
 
     static double fps(String s) {
+        double v;
         if (s.contains("/")) {
             String[] p = s.split("/");
-            return Double.parseDouble(p[0]) / Double.parseDouble(p[1]);
+            v = Double.parseDouble(p[0]) / Double.parseDouble(p[1]);
+        } else {
+            v = Double.parseDouble(s);
         }
-        return Double.parseDouble(s);
+        if (!(v > 0) || Double.isInfinite(v)) {
+            throw new IllegalArgumentException("bad fps '" + s + "'");
+        }
+        return v;
     }
 
-    private static List<Path> frames(Path clipsRoot, String file, double fps) throws IOException, InterruptedException {
+    /** The frames of one clip; closing it deletes the temporary frame folder (the frames show consented faces). */
+    private static final class Clip implements AutoCloseable {
+        final List<Path> frames;
+        private final Path tmp;
+
+        Clip(List<Path> frames, Path tmp) {
+            this.frames = frames;
+            this.tmp = tmp;
+        }
+
+        @Override
+        public void close() {
+            if (tmp != null) {
+                deleteTree(tmp);
+            }
+        }
+    }
+
+    /** Delete a folder and everything in it; never throws. */
+    static void deleteTree(Path dir) {
+        try (Stream<Path> s = Files.walk(dir)) {
+            s.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    System.err.println("could not delete " + p + ": " + e);
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("could not delete " + dir + ": " + e);
+        }
+    }
+
+    private static Clip frames(Path clipsRoot, String file) throws IOException, InterruptedException {
         Path p = clipsRoot.resolve(file);
         if (Files.isDirectory(p)) {
             try (Stream<Path> s = Files.list(p)) {
-                return s.filter(f -> f.toString().endsWith(".jpg")).sorted().collect(Collectors.toList());
+                return new Clip(s.filter(f -> f.toString().endsWith(".jpg")).sorted().collect(Collectors.toList()), null);
             }
         }
         Path tmp = Files.createTempDirectory("sajeev-eval");
-        Process pr = new ProcessBuilder("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", p.toString(), "-q:v", "3",
-                tmp.resolve("%04d.jpg").toString()).inheritIO().start();
-        if (pr.waitFor() != 0) {
-            throw new IOException("ffmpeg failed for " + p);
-        }
-        try (Stream<Path> s = Files.list(tmp)) {
-            return s.sorted().collect(Collectors.toList());
+        try {
+            Process pr = new ProcessBuilder("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", p.toString(), "-q:v", "3",
+                    tmp.resolve("%04d.jpg").toString()).inheritIO().start();
+            if (pr.waitFor() != 0) {
+                throw new IOException("ffmpeg failed for " + p);
+            }
+            try (Stream<Path> s = Files.list(tmp)) {
+                return new Clip(s.sorted().collect(Collectors.toList()), tmp);
+            }
+        } catch (IOException | InterruptedException | RuntimeException e) {
+            deleteTree(tmp);
+            throw e;
         }
     }
 
     static Presentation run(LivenessEngine engine, Path clipsRoot, String[] row) throws Exception {
-        double fps = fps(row[4]);
-        long step = (long) (1_000_000_000.0 / fps);
+        long step = (long) (1_000_000_000.0 / fps(row[4]));
         EngineSession s = engine.start(Workflow.RESIDENT, new PolicyConfig(0.80, 2, 3));
-        List<Path> frames = frames(clipsRoot, row[0], fps);
-        long t0 = 1_000_000_000L;
-        for (int i = 0; i < frames.size() && s.state() != LivenessSession.State.DONE
-                && s.state() != LivenessSession.State.ABORTED; i++) {
-            s.onFrame(new Frame(Files.readAllBytes(frames.get(i)), t0 + i * step, i));
-            Thread.sleep(15);
+        int fed = 0;
+        int total;
+        try (Clip clip = frames(clipsRoot, row[0])) {
+            total = clip.frames.size();
+            long t0 = 1_000_000_000L;
+            for (int i = 0; i < total && s.state() != LivenessSession.State.DONE && s.state() != LivenessSession.State.ABORTED; i++) {
+                s.onFrame(new Frame(Files.readAllBytes(clip.frames.get(i)), t0 + i * step, i));
+                fed++;
+                if (!s.awaitIdle(FRAME_TIMEOUT_MS)) { // one frame at a time: the engine finishes this frame before it gets the next
+                    break;
+                }
+            }
         }
-        long end = System.currentTimeMillis() + 8000;
-        while (s.verdict() == null && System.currentTimeMillis() < end) {
-            Thread.sleep(50);
-        }
+        s.awaitIdle(FRAME_TIMEOUT_MS);
         Verdict v = s.verdict();
-        System.out.println("  " + row[0] + ": frames=" + frames.size() + " reason=" + (v == null ? "none" : v.reason() + " " + v.error()));
+        System.out.println("  " + row[0] + ": frames=" + total + " fed=" + fed + " reason=" + (v == null ? "none (clip ended before a verdict)" : v.reason() + " " + v.error()));
         boolean accepted = v != null && (v.tier() == Verdict.Tier.LIVE_PASSIVE || v.tier() == Verdict.Tier.LIVE_ACTIVE);
         Map<String, String> labels = new TreeMap<>();
         Map<String, Double> probs = new TreeMap<>();

@@ -41,6 +41,31 @@ public final class LivenessEngine implements LivenessService, AutoCloseable {
         this.settings = settings;
         this.audit = audit;
         this.metrics = metrics;
+        io.sajeev.image.ImageCodec.setLimits(settings.maxImageSide, settings.maxImagePixels);
+    }
+
+    private final java.util.concurrent.atomic.AtomicInteger running = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** @return true when a session slot was taken (the session must call {@link #releaseSlot()} exactly once when it ends) */
+    boolean tryAcquireSlot() {
+        while (true) {
+            int n = running.get();
+            if (n >= settings.maxConcurrentSessions) {
+                return false;
+            }
+            if (running.compareAndSet(n, n + 1)) {
+                return true;
+            }
+        }
+    }
+
+    void releaseSlot() {
+        running.decrementAndGet();
+    }
+
+    /** @return how many sessions are running now (a session that has ended and released its worker is not counted) */
+    public int runningSessions() {
+        return running.get();
     }
 
     @Override

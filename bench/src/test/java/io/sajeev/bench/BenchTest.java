@@ -32,9 +32,23 @@ class BenchTest {
 
     @Test
     void test_run_sh_prints_verdict_and_votes(@TempDir Path dir) throws Exception {
-        byte[] one = Files.readAllBytes(Paths.get("../testdata/fixtures-faces/one_face.jpg"));
-        for (int i = 0; i < 30; i++) {
-            Files.write(dir.resolve(String.format("%03d.jpg", i)), one);
+        // identical copies would now be ended as a frozen stream before any voter runs, so each frame gets its own sensor noise
+        java.awt.image.BufferedImage base = javax.imageio.ImageIO.read(Paths.get("../testdata/fixtures-faces/one_face.jpg").toFile());
+        for (int i = 0; i < 80; i++) { // 8 s of frame time: enough for the passive stage and a challenge that times out
+            java.awt.image.BufferedImage b = new java.awt.image.BufferedImage(base.getWidth(), base.getHeight(),
+                    java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.util.Random rnd = new java.util.Random(i);
+            for (int y = 0; y < b.getHeight(); y++) {
+                for (int x = 0; x < b.getWidth(); x++) {
+                    int p = base.getRGB(x, y);
+                    int d = rnd.nextInt(5) - 2;
+                    int r = Math.max(0, Math.min(255, ((p >> 16) & 255) + d));
+                    int g = Math.max(0, Math.min(255, ((p >> 8) & 255) + d));
+                    int bl = Math.max(0, Math.min(255, (p & 255) + d));
+                    b.setRGB(x, y, (r << 16) | (g << 8) | bl);
+                }
+            }
+            javax.imageio.ImageIO.write(b, "jpg", dir.resolve(String.format("%03d.jpg", i)).toFile());
         }
         String out = run(0, "--clip", dir.toString(), "--fps", "10", "--models", models());
         assertTrue(out.contains("verdict: "), out);
@@ -42,6 +56,18 @@ class BenchTest {
             assertTrue(out.contains("vote " + v), "missing " + v + "\n" + out);
         }
         assertTrue(out.contains("measured fps: 10.00"), out);
+    }
+
+    @Test
+    void test_a_clip_of_one_repeated_still_is_reported_as_a_frozen_stream_and_twice_gives_the_same_report(@TempDir Path dir) throws Exception {
+        byte[] one = Files.readAllBytes(Paths.get("../testdata/fixtures-faces/one_face.jpg"));
+        for (int i = 0; i < 30; i++) {
+            Files.write(dir.resolve(String.format("%03d.jpg", i)), one);
+        }
+        String a = run(0, "--clip", dir.toString(), "--fps", "10", "--models", models());
+        String b = run(0, "--clip", dir.toString(), "--fps", "10", "--models", models());
+        assertTrue(a.contains("verdict: ATTACK_SUSPECTED") && a.contains("reason=frozen_stream"), a);
+        assertEquals(a, b, "the bench is not repeatable");
     }
 
     @Test

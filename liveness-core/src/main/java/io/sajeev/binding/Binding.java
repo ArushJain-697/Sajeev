@@ -1,9 +1,11 @@
 // #27 (WS1) | Bible §6.7 | Binding: is the face that gets stored the face that was seen live? Java 11 only.
-// Four checks: exactly one face, embedding continuity, landmark-geometry continuity, and timing.
+// Five checks: exactly one face, one person throughout the session, embedding continuity, landmark-geometry continuity
+// (both against the SAME live observation), and timing.
 // All limits are parameters (TARGET, tuned on DEV so each signal rejects at most 1% of honest presentations, #62).
 package io.sajeev.binding;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -27,8 +29,13 @@ public final class Binding {
             this.geometryDifference = geometryDifference;
         }
 
+        /** @param check the one failed check (for example "no_live_verdict" or "already_used") @return an unbound result */
+        public static Result unbound(String check) {
+            return new Result(Verdict.CAPTURE_UNBOUND, Collections.singletonList(check), -1.0, Double.MAX_VALUE);
+        }
+
         public Verdict verdict() { return verdict; }
-        /** @return names of the failed checks: faces, no_live_evidence, embedding, geometry, timing */
+        /** @return names of the failed checks: faces, identity_changed, no_live_evidence, embedding, geometry, timing */
         public List<String> failedChecks() { return failedChecks; }
         public double bestCosine() { return bestCosine; }
         public double geometryDifference() { return geometryDifference; }
@@ -52,7 +59,11 @@ public final class Binding {
     private final int ringSize;
     private final boolean timingCheckEnabled;
     private final List<Observation> ring = new ArrayList<>();
-    private volatile long liveVerdictNanos = -1; // written by the session's worker, read by the caller's thread
+    private float[] anchor; // the first accepted live embedding: everyone seen later must be this person
+    private int disagreements;
+    private volatile boolean identityChanged;
+    private volatile boolean hasVerdict; // written by the session's worker (or abort), read by the caller's thread
+    private volatile long liveVerdictNanos;
 
     /**
      * @param embeddingThreshold cosine at or above which the embeddings match (0.363 is OpenCV's verification default,
@@ -76,12 +87,23 @@ public final class Binding {
     }
 
     /**
-     * Record one live observation during the session. Only the best ones are kept.
+     * Record one live observation during the session. Only the best ones are kept. The first one becomes the anchor: a later
+     * observation that does not match it is not kept, and two or more of them mean the person changed during the session
+     * (the capture then cannot be bound).
      * @param embedding the face embedding on this frame
      * @param geometry the landmark-geometry ratios on this frame
      * @param quality a quality score; higher is better
      */
-    public void observeLive(float[] embedding, double[] geometry, double quality) {
+    public synchronized void observeLive(float[] embedding, double[] geometry, double quality) {
+        if (anchor == null) {
+            anchor = embedding;
+        } else if (!(SfaceEmbedder.cosine(anchor, embedding) >= embeddingThreshold)) { // NaN fails too
+            disagreements++;
+            if (disagreements >= 2) {
+                identityChanged = true;
+            }
+            return;
+        }
         ring.add(new Observation(embedding, geometry, quality));
         ring.sort(Comparator.comparingDouble((Observation o) -> o.quality).reversed());
         while (ring.size() > ringSize) {
@@ -89,9 +111,20 @@ public final class Binding {
         }
     }
 
+    /** @return true when two or more live frames did not match the first one (a different person appeared during the session) */
+    public boolean identityChanged() {
+        return identityChanged;
+    }
+
     /** @param nanos the monotonic time of the liveness verdict */
     public void liveVerdictAt(long nanos) {
         this.liveVerdictNanos = nanos;
+        this.hasVerdict = true;
+    }
+
+    /** Forget the verdict time (the session was aborted, so nothing can be bound to it). */
+    public void clearVerdict() {
+        this.hasVerdict = false;
     }
 
     /**
@@ -103,32 +136,68 @@ public final class Binding {
      * @param captureTimeoutMillis the device's capture timeout (the stream stops while a capture runs)
      * @return BOUND only when every check passes
      */
-    public Result bind(int facesInCapture, float[] captureEmbedding, double[] captureGeometry,
+    public synchronized Result bind(int facesInCapture, float[] captureEmbedding, double[] captureGeometry,
                        long captureArrivalNanos, long captureTimeoutMillis) {
         List<String> failed = new ArrayList<>();
         if (facesInCapture != 1) {
             failed.add("faces");
+        }
+        if (identityChanged) {
+            failed.add("identity_changed");
         }
         double best = -1.0;
         double geomDiff = Double.MAX_VALUE;
         if (ring.isEmpty()) {
             failed.add("no_live_evidence");
         } else {
+            boolean anyBoth = false;
+            boolean anyCosine = false;
+            boolean anyGeometry = false;
             for (Observation o : ring) {
-                best = Math.max(best, SfaceEmbedder.cosine(o.embedding, captureEmbedding));
-                geomDiff = Math.min(geomDiff, GeometryRatios.maxRelativeDifference(captureGeometry, o.geometry));
+                double c = SfaceEmbedder.cosine(o.embedding, captureEmbedding);
+                double g = GeometryRatios.maxRelativeDifference(captureGeometry, o.geometry);
+                best = Math.max(best, c);
+                geomDiff = Math.min(geomDiff, g);
+                boolean cosOk = c >= embeddingThreshold; // NaN (a zero vector) fails
+                boolean geomOk = g <= geometryTolerance;
+                anyCosine |= cosOk;
+                anyGeometry |= geomOk;
+                anyBoth |= cosOk && geomOk;
             }
-            if (!(best >= embeddingThreshold)) { // NaN (a zero vector) fails too
-                failed.add("embedding");
-            }
-            if (!(geomDiff <= geometryTolerance)) {
-                failed.add("geometry");
+            if (!anyBoth) {
+                // both signals must agree on the SAME live observation: matching two different ones is not a match
+                if (!anyCosine) {
+                    failed.add("embedding");
+                }
+                if (!anyGeometry || anyCosine) {
+                    failed.add("geometry");
+                }
             }
         }
-        long allowedNanos = (captureTimeoutMillis + windowMarginMillis) * 1_000_000L;
-        if (timingCheckEnabled && (liveVerdictNanos < 0 || captureArrivalNanos - liveVerdictNanos > allowedNanos)) {
+        if (timingCheckEnabled && !timingOk(captureArrivalNanos, captureTimeoutMillis)) {
             failed.add("timing");
         }
         return new Result(failed.isEmpty() ? Verdict.BOUND : Verdict.CAPTURE_UNBOUND, failed, best, geomDiff);
+    }
+
+    private boolean timingOk(long captureArrivalNanos, long captureTimeoutMillis) {
+        if (!hasVerdict) {
+            return false;
+        }
+        if (captureTimeoutMillis < 0 || windowMarginMillis < 0) {
+            return false;
+        }
+        long millis = captureTimeoutMillis + windowMarginMillis;
+        if (millis < 0) { // the sum overflowed: saturate
+            millis = Long.MAX_VALUE;
+        }
+        long allowedNanos = millis > Long.MAX_VALUE / 1_000_000L ? Long.MAX_VALUE : millis * 1_000_000L;
+        long diff;
+        try {
+            diff = Math.subtractExact(captureArrivalNanos, liveVerdictNanos);
+        } catch (ArithmeticException e) {
+            return false;
+        }
+        return diff <= allowedNanos;
     }
 }

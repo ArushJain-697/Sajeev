@@ -33,6 +33,15 @@ public final class GeometryRatios {
         if (a == null || b == null || a.length != b.length) {
             return Double.MAX_VALUE; // vectors that cannot be compared never count as close
         }
+        boolean allZeroA = true;
+        boolean allZeroB = true;
+        for (int i = 0; i < a.length; i++) {
+            allZeroA &= a[i] == 0.0;
+            allZeroB &= b[i] == 0.0;
+        }
+        if (allZeroA || allZeroB) {
+            return Double.MAX_VALUE; // {0,0,0} means "no geometry could be measured": it never matches, not even itself
+        }
         double worst = 0;
         for (int i = 0; i < a.length; i++) {
             double base = Math.max(Math.abs(b[i]), 1e-9);

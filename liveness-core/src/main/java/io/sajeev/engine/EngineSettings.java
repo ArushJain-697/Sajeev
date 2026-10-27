@@ -33,6 +33,27 @@ public final class EngineSettings {
     public double edgeMargin = 12;
     public double flatMinYaw = 0.14;
     public double flatResidual = 0.02;
+    /** Frozen stream: mean absolute grey difference (0..255, 64x64 thumbnails) at or below which consecutive frames are "the same picture". TARGET 0.02: identical frames give 0.000; the 9 real DEV clips (one person, one webcam, very still) never had 7 consecutive pairs below 0.055. */
+    public double frozenMaxMeanAbsDiff = 0.02;
+    /** Frozen stream: how many consecutive-frame differences must all be under the limit before the stream is called frozen. */
+    public int frozenMinPairs = 5;
+    /** Least time (on the frame arrival clock) of usable frames that must be observed before a passive pass. TARGET. */
+    public long minPassiveMillis = 700;
+    /** A gap between two accepted frames longer than this is clamped to it (an absurd timestamp jump). */
+    public long maxArrivalGapMillis = 10_000;
+    /** Frames with an unusable arrival time (not strictly increasing, out of range) tolerated before the session ends as INVALID_FRAME_DATA. */
+    public int maxRejectedTimestamps = 10;
+    /** Largest width or height of a frame or capture image we agree to decode. */
+    public int maxImageSide = 8192;
+    /** Largest width x height of a frame or capture image we agree to decode (40 megapixels). */
+    public long maxImagePixels = 40_000_000L;
+    /** Sessions that may run at the same time in one engine; the next start ends at once with ENGINE_ERROR. */
+    public int maxConcurrentSessions = 16;
+    /**
+     * Evaluation mode: no load shedding, no wall-clock stall timer and a fixed challenge seed, so the same frames always give the
+     * same verdict. Used by run_eval and the bench together with {@code EngineSession.awaitIdle(long)}.
+     */
+    public boolean deterministic = false;
     /** Test hook only: artificial delay per processed frame, to prove a slow engine never blocks the producer. */
     public long testDelayMillis = 0;
     /** The prompt counts as shown when the active stage starts (bench and tests). A UI sets this to false and calls markPrompted(). */
