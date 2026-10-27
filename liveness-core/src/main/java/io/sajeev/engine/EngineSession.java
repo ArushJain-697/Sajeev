@@ -90,6 +90,7 @@ public final class EngineSession implements LivenessSession {
     private Detection lastFace;
     private long currentArrivalNanos;
     private long firstArrivalNanos = -1;
+    private long passiveNextRunAt; // while waiting for evidence of life: run the passive voters again from this usable-frame count
     private long usableCount;
     private long arrivalsCount;
     /** Arrival times of every frame the device DELIVERED (before any frame is dropped by the bounded queue). */
@@ -562,7 +563,7 @@ public final class EngineSession implements LivenessSession {
                     finish(Verdict.Tier.ATTACK_SUSPECTED, ErrorState.PAD_FAIL, "frozen_stream");
                 } else if (f.arrivalNanos() - firstUsableArrival < st.minPassiveMillis * 1_000_000L) {
                     checkPassiveTimeout(f); // not watched long enough yet: no passive pass this early
-                } else {
+                } else if (usableCount >= passiveNextRunAt) {
                     runPassive(f);
                 }
             } else {
@@ -629,11 +630,26 @@ public final class EngineSession implements LivenessSession {
         passiveVotes.put("V3_flatness", v3.vote(new ArrayList<>(usableLandmarks)));
         passiveVotes.put("V4_frame_edge", v4.vote(lastImage, lastFace));
         passiveVotes.put("V5_reflection", v5.vote(lastImage, lastFace));
+        passiveVotes.put(io.sajeev.passive.motion.EyelidMotionVoter.NAME, new io.sajeev.passive.motion.EyelidMotionVoter(
+                st.eyelidMinRange, st.eyelidMinSpanMillis * 1_000_000L).vote(new ArrayList<>(usableFeatures)));
         List<Vote> votes = new ArrayList<>(passiveVotes.values());
         boolean activeEnabled = Boolean.parseBoolean(engine.config.value("active.enabled", name()));
         int minLive = Integer.parseInt(engine.config.value("passive.minLiveVotes", name()));
-        DecisionGate.Decision g = DecisionGate.decide(votes, weights(votes.size()), true, policy.passiveThreshold(),
-                minLive, activeEnabled);
+        java.util.Set<String> evidence = new java.util.HashSet<>(Arrays.asList(st.positiveEvidenceVoters.split(",")));
+        boolean[] positive = new boolean[votes.size()];
+        int vi = 0;
+        for (String voter : passiveVotes.keySet()) {
+            positive[vi++] = evidence.contains(voter);
+        }
+        DecisionGate.Decision g = DecisionGate.decide(votes, weights(votes.size()), positive, true, policy.passiveThreshold(),
+                minLive, activeEnabled, true);
+        if (g.outcome() == DecisionGate.Outcome.ACTIVE_REQUIRED && !g.strict()
+                && f.arrivalNanos() - firstUsableArrival < st.maxPassiveObserveMillis * 1_000_000L) {
+            // no attack vote, only too little evidence of life so far (for example nothing has blinked yet): keep watching
+            // for a while before asking the person to do something
+            passiveNextRunAt = usableCount + Math.max(1, st.passiveRerunEvery);
+            return;
+        }
         Map<String, String> a = new LinkedHashMap<>();
         a.put("gate", g.outcome().name());
         a.put("band", io.sajeev.audit.ScoreBand.of(g.passiveScore()).name());

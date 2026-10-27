@@ -33,6 +33,16 @@ public final class EngineSettings {
     public double edgeMargin = 12;
     public double flatMinYaw = 0.14;
     public double flatResidual = 0.02;
+    /** Voters whose LIVE vote counts as evidence of life towards passive.minLiveVotes (comma separated names). The others can only veto. */
+    public String positiveEvidenceVoters = "V1_texture_minifasnet,V3_flatness,V6_eyelid_motion";
+    /** V6 eyelid motion: smallest spread of the eye aspect ratio that counts as the eyelids moving (TARGET; attack clip 0.034, real 0.07 and up). */
+    public double eyelidMinRange = 0.06;
+    /** V6: least observed time (frame arrival clock) before the eyelid voter judges. */
+    public long eyelidMinSpanMillis = 2_000;
+    /** When the only thing missing for a passive pass is evidence of life, keep watching up to this long (arrival clock) before the active challenge starts. */
+    public long maxPassiveObserveMillis = 5_000;
+    /** While waiting for evidence, run the passive voters again after this many new usable frames. */
+    public int passiveRerunEvery = 10;
     /** Frozen stream: mean absolute grey difference (0..255, 64x64 thumbnails) at or below which consecutive frames are "the same picture". TARGET 0.02: identical frames give 0.000; the 9 real DEV clips (one person, one webcam, very still) never had 7 consecutive pairs below 0.055. */
     public double frozenMaxMeanAbsDiff = 0.02;
     /** Frozen stream: how many consecutive-frame differences must all be under the limit before the stream is called frozen. */

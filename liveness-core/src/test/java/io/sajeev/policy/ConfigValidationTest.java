@@ -33,10 +33,10 @@ class ConfigValidationTest {
     @Test
     void test_minLiveVotes_must_be_between_1_and_5() {
         bad("passive.minLiveVotes", "0");
-        bad("passive.minLiveVotes", "6");
+        bad("passive.minLiveVotes", "7");
         bad("passive.minLiveVotes", "three");
         good("passive.minLiveVotes", "1");
-        good("passive.minLiveVotes", "5");
+        good("passive.minLiveVotes", "6");
     }
 
     @Test
@@ -45,7 +45,7 @@ class ConfigValidationTest {
         bad("passive.voterWeights", "1,-2,1");
         bad("passive.voterWeights", "a,b");
         bad("passive.voterWeights", "1,,1");
-        bad("passive.voterWeights", "1,1,1,1,1,1");
+        bad("passive.voterWeights", "1,1,1,1,1,1,1");
         good("passive.voterWeights", "1,2,1,1,1");
         good("passive.voterWeights", "equal");
     }

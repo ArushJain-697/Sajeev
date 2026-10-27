@@ -34,7 +34,7 @@ class BenchTest {
     void test_run_sh_prints_verdict_and_votes(@TempDir Path dir) throws Exception {
         // identical copies would now be ended as a frozen stream before any voter runs, so each frame gets its own sensor noise
         java.awt.image.BufferedImage base = javax.imageio.ImageIO.read(Paths.get("../testdata/fixtures-faces/one_face.jpg").toFile());
-        for (int i = 0; i < 80; i++) { // 8 s of frame time: enough for the passive stage and a challenge that times out
+        for (int i = 0; i < 160; i++) { // 16 s of frame time: the passive stage may watch up to 5 s for evidence of life, then a challenge times out
             java.awt.image.BufferedImage b = new java.awt.image.BufferedImage(base.getWidth(), base.getHeight(),
                     java.awt.image.BufferedImage.TYPE_INT_RGB);
             java.util.Random rnd = new java.util.Random(i);

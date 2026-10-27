@@ -73,7 +73,21 @@ public final class DecisionGate {
      */
     public static Decision decide(List<Vote> votes, double[] weights, boolean streamUsable, double threshold,
                                   int minLiveVotes, boolean activeEnabled, boolean abstainNeverCountsAsLive) {
-        if (votes.size() != weights.length) {
+        return decide(votes, weights, null, streamUsable, threshold, minLiveVotes, activeEnabled, abstainNeverCountsAsLive);
+    }
+
+    /**
+     * The gate with the positive-evidence rule (red team, 27 Oct 2026): a voter that can only find attack evidence (moire, frame
+     * edge, reflection) votes LIVE when it finds none. That is "no evidence of an attack", not evidence of life, so its LIVE vote
+     * still feeds the score but does NOT count towards {@code minLiveVotes}. Only voters flagged in {@code positiveEvidence}
+     * (the texture CNN and the 3D flatness voter) can supply the live votes a passive pass needs; otherwise the client must run
+     * the active challenge.
+     *
+     * @param positiveEvidence one flag per vote: true when this voter's LIVE vote counts as evidence of life; null = all true
+     */
+    public static Decision decide(List<Vote> votes, double[] weights, boolean[] positiveEvidence, boolean streamUsable,
+                                  double threshold, int minLiveVotes, boolean activeEnabled, boolean abstainNeverCountsAsLive) {
+        if (votes.size() != weights.length || (positiveEvidence != null && positiveEvidence.length != votes.size())) {
             throw new IllegalArgumentException("one weight per vote");
         }
         if (!streamUsable) {
@@ -95,7 +109,9 @@ public final class DecisionGate {
                     attacks++;
                     break;
                 case LIVE:
-                    lives++;
+                    if (positiveEvidence == null || positiveEvidence[i]) {
+                        lives++;
+                    }
                     break;
                 default:
                     break; // ABSTAIN never counts as LIVE and is left out of the score

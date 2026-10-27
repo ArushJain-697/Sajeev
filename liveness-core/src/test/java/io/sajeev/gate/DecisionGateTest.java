@@ -104,4 +104,49 @@ class DecisionGateTest {
         }
         assertEquals(243 * 4, cases);
     }
+
+    // ---- positive-evidence rule (red team, 27 Oct 2026) ----
+
+    /** Voters in engine order: V1 texture, V2 moire, V3 flatness, V4 frame edge, V5 reflection. Only V1 and V3 are evidence of life. */
+    private static final boolean[] EVIDENCE = {true, false, true, false, false};
+
+    private static DecisionGate.Decision runEvidence(List<Vote> v, int minLive) {
+        return DecisionGate.decide(v, Arrays.copyOf(W5, v.size()), EVIDENCE, true, THR, minLive, true, true);
+    }
+
+    @Test
+    void test_voters_that_only_find_no_attack_never_count_towards_the_live_minimum() {
+        // the phone-screen clip: texture LIVE (a camera that cannot tell), flatness ABSTAIN (nothing moves), the three
+        // attack-only voters LIVE because they found nothing. Four LIVE votes, one of them evidence of life.
+        List<Vote> v = Arrays.asList(live(1.0), live(0.9), abstain(), live(0.9), live(0.9));
+        DecisionGate.Decision d = runEvidence(v, 2);
+        assertEquals(DecisionGate.Outcome.ACTIVE_REQUIRED, d.outcome());
+    }
+
+    @Test
+    void test_a_passive_pass_needs_enough_votes_that_are_evidence_of_life() {
+        List<Vote> both = Arrays.asList(live(1.0), live(0.9), live(0.95), live(0.9), live(0.9));
+        assertEquals(DecisionGate.Outcome.PASSIVE_PASS, runEvidence(both, 2).outcome());
+        List<Vote> onlyTexture = Arrays.asList(live(1.0), live(0.9), abstain(), live(0.9), live(0.9));
+        assertFalse(runEvidence(onlyTexture, 2).outcome() == DecisionGate.Outcome.PASSIVE_PASS);
+        List<Vote> onlyFlatness = Arrays.asList(abstain(), live(0.9), live(0.95), live(0.9), live(0.9));
+        assertFalse(runEvidence(onlyFlatness, 2).outcome() == DecisionGate.Outcome.PASSIVE_PASS);
+    }
+
+    @Test
+    void test_the_evidence_flags_never_weaken_the_attack_veto() {
+        List<Vote> v = Arrays.asList(live(1.0), attack(), live(0.95), attack(), live(0.9));
+        assertEquals(DecisionGate.Outcome.PAD_FAIL, runEvidence(v, 2).outcome());
+    }
+
+    @Test
+    void test_a_flag_list_of_the_wrong_length_is_refused() {
+        List<Vote> v = Arrays.asList(live(1.0), live(1.0));
+        try {
+            DecisionGate.decide(v, new double[] {1, 1}, new boolean[] {true}, true, THR, 1, true, true);
+            org.junit.jupiter.api.Assertions.fail("a mismatched flag list was accepted");
+        } catch (IllegalArgumentException expected) {
+            // fail closed
+        }
+    }
 }

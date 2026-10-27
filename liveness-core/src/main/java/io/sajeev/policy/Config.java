@@ -30,7 +30,7 @@ public final class Config {
         Map<String, String> d = new TreeMap<>();
         d.put("enabled", "true");
         d.put("passive.threshold", "0.80");
-        d.put("passive.minLiveVotes", "3");
+        d.put("passive.minLiveVotes", "2"); // LIVE votes of positive-evidence voters (texture CNN, flatness) a passive pass needs
         d.put("passive.voterWeights", "equal");
         d.put("active.enabled", "true");
         d.put("active.minChallenges", "2");
@@ -200,14 +200,14 @@ public final class Config {
             throw new ConfigException("binding.windowMarginMs must be between 0 and 60000");
         }
         long minLive = whole(v, "passive.minLiveVotes");
-        if (minLive < 1 || minLive > 5) {
-            throw new ConfigException("passive.minLiveVotes must be between 1 and 5 (there are five voters)");
+        if (minLive < 1 || minLive > 6) {
+            throw new ConfigException("passive.minLiveVotes must be between 1 and 6 (there are six voters)");
         }
         String weights = v.get("passive.voterWeights");
         if (!"equal".equals(weights)) {
             String[] parts = weights.split(",", -1);
-            if (parts.length > 5) {
-                throw new ConfigException("passive.voterWeights has more than five weights");
+            if (parts.length > 6) {
+                throw new ConfigException("passive.voterWeights has more than six weights");
             }
             for (String p : parts) {
                 try {
