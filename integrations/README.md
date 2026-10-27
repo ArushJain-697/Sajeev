@@ -1,4 +1,4 @@
-# Integrations: client changes as patches (until the forks exist)
+# Integrations: client changes as patches and fork branches
 
 The desktop client changes are kept here as patch files against the pinned upstream commit. When the GitHub forks exist (D26), each patch is applied on its fork branch and becomes a pull request inside the fork.
 
@@ -37,3 +37,12 @@ The desktop branch targets `release-1.2.0.x` (JDK 11); the Android branch needs 
 1. Engine for the desktop client: in this repository run `mvn -pl liveness-api,liveness-core -DskipTests install` (JDK 17 or 11, it compiles to Java 11). That puts `io.sajeev:liveness-api` and `io.sajeev:liveness-core` in your local Maven repository, which is where `registration-services/pom.xml` looks.
 2. Desktop client: `cd registration && mvn -Dgpg.skip=true install` with JDK 11 (the models are found through `-Dmosip.registration.liveness.model.dir=<models>`, see `liveness-models/README.md`).
 3. Engine for the Android client: `mvn -pl liveness-api,liveness-core -DskipTests package`, then `integrations/engine-android/prepare.sh` and `gradle :engine:assembleRelease` in `integrations/engine-android`; copy `engine/build/outputs/aar/engine-release.aar` to `android/app/libs/sajeev-engine.aar` in the Android fork (Flutter 3.10.x).
+
+## Fork branches (all four exist under github.com/ArushJain-697, 24 Oct 2026)
+| Repo | Branch | Base commit | Patches |
+|---|---|---|---|
+| registration-client | `sajeev/release-1.2.0.x` (PR base `release-1.2.0.x`) | c1cc4e7fc1625ccc6ef26282910934bfcb9d164c | 0001, 0005 |
+| android-registration-client | `sajeev/liveness` (PR base `develop`) | 6e1943cf | 0006, 0007 |
+| android-camera-mds | `sajeev/frame-feed` (PR base `develop`) | da9d7e49edae2a94cccddf948b7e7633360cd837 | 0002, 0003 |
+| mosip-mock-services | `sajeev/replay-fps` | 3d2174d | 0004 |
+Patches 0005 and 0007 are regenerated from the fork branches (`git diff`); `make_fork_branches.sh` rebuilds both trees exactly.

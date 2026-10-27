@@ -1,6 +1,6 @@
 # Sequence diagrams
 
-Desktop sequences match the code in patch 0005. Android sequences are the plan; those screens are not built.
+Desktop sequences match the code in patch 0005. Android sequences (resident capture, operator face login, supervisor approval) describe the code in patches 0006 and 0007; none of these flows was run against a MOSIP server.
 
 ## Resident {#resident} (desktop)
 

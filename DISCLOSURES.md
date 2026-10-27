@@ -13,8 +13,8 @@ Every third-party component the repo uses, plus what we only plan. "Ours" means 
 | SFace face recognition (`face_recognition_sface_2021dec.onnx`, the Binding embedding) | Apache-2.0 | github.com/opencv/opencv_zoo, models/face_recognition_sface | borrowed | VERIFIED: LICENSE file read (Apache License 2.0) on 23 Oct 2026 |
 | MiniFASNet code (Silent-Face-Anti-Spoofing, V1 texture voter) | Apache-2.0 | github.com/minivision-ai/Silent-Face-Anti-Spoofing | borrowed | VERIFIED: repo licence Apache-2.0 |
 | MiniFASNet weights (`2.7_80x80_MiniFASNetV2.pth`, `4_0_0_80x80_MiniFASNetV1SE.pth`) | **NO STATED LICENCE** | same repo, resources/anti_spoof_models | borrowed | **UNVERIFIED**: the repo states no licence for the weights. Must be resolved (pre-converted alternative with a stated licence, or a written permission) before any public release |
-| JTransforms (planned for FFT; we use our own FFT now) | BSD-2-Clause | github.com/wendykierp/JTransforms | PLANNED | VERIFIED: BSD-2 header read |
-| EJML (planned for matrix work) | Apache-2.0 | github.com/lessthanoptimal/ejml | PLANNED | VERIFIED: "released under the Apache v2.0 open source license" |
+| JTransforms (planned for FFT; we use our own FFT now) | BSD-2-Clause | github.com/wendykierp/JTransforms | NOT USED (not shipped; removed from NOTICE) | VERIFIED: BSD-2 header read |
+| EJML (planned for matrix work) | Apache-2.0 | github.com/lessthanoptimal/ejml | NOT USED (not shipped; removed from NOTICE) | VERIFIED: "released under the Apache v2.0 open source license" |
 | jqwik (property tests) | EPL-2.0 | github.com/jqwik-team/jqwik | USED (test scope, 1.8.5) | VERIFIED: EPL-2.0 listed on the repo page |
 | MOSIP MockMDS (test fixture only, run locally, not shipped) | MPL-2.0 | github.com/mosip/mosip-mock-services | borrowed (test) | MPL-2.0 per the repo's licence; not copied into this repo |
 | MOSIP android-camera-mds (MockAndroidSBI, build only, not shipped) | MPL-2.0 | github.com/mosip/android-camera-mds | borrowed (build only) | per the repo's licence; not copied into this repo |
@@ -35,7 +35,7 @@ Every third-party component the repo uses, plus what we only plan. "Ours" means 
 - `testdata/fixtures-faces/one_face.jpg`: scikit-image `astronaut()`, a NASA photo (public domain). Other fixtures are generated from it (see that folder's README).
 - `testdata/clips-synthetic/`: ffmpeg test pattern, not a person.
 - `testdata/reference/minifas_pytorch_ref.json`: outputs of our own PyTorch run.
-- No real person's recording is in the repo. Recordings live outside git (`eval/clips/`, git-ignored).
+- No recording of the author or of any consenting subject is in the repo. `testdata/recorded-095` and `testdata/recorded-android` hold responses recorded from MOSIP's own mock devices (MockMDS and MockAndroidSBI); the face inside them is the mock devices' stock image of an unidentified person, NOT verified as free to redistribute (UNVERIFIED provenance; the mock repositories are MPL-2.0). `testdata/fixtures-faces` are public-domain photographs. Recordings live outside git (`eval/clips/`, git-ignored).
 
 ## Not in this repo (on purpose)
 - Model files (`*.onnx`, `*.pth`, `*.task`, `*.tflite`) live in `tools-local/` outside git until the licence checks above are closed.
@@ -43,3 +43,6 @@ Every third-party component the repo uses, plus what we only plan. "Ours" means 
 ## What we wrote that looks like code from elsewhere
 - The engine's image type (`PixelImage`), bilinear resize, FFT, RANSAC homography, similarity transform and moire peak test are our own code, written for Java 11 and Android. The MiniFASNet preprocessing follows the published reference implementation's steps (crop scale, BGR order) and was checked against its output; the weights are not ours.
 - Patches to MOSIP code (`integrations/patches/`) are MPL-2.0 changes to MPL-2.0 projects and stay in the fork pull requests.
+
+## Models are downloaded from a public GitHub release (24 Oct 2026)
+`scripts/fetch_models.sh` downloads `sajeev-models-0.1.0.zip` from the GitHub release `models-0.1.0` of this repository. The zip contains the YuNet, SFace and MediaPipe-landmark ONNX files and the two MiniFASNet ONNX files converted from the Minivision `.pth` weights. **The MiniFASNet weights have no stated licence**, so by publishing that release the author redistributes them without a licence. If Minivision or MOSIP objects, delete the release (the texture voter then has no model until a licensed one is found). The manifest is signed with a development key.

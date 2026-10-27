@@ -21,7 +21,7 @@ flowchart LR
   D2 --> FG
   D3 --> B
   Engine --> API[LivenessService / LivenessSession]
-  API --> Client[Registration Client  Desktop: built, Android: planned]
+  API --> Client[Registration Client  Desktop: built (not run on a screen), Android: built (emulator only)]
   classDef s fill:#eef
 ```
 

@@ -16,3 +16,9 @@ liveness-models/models/
 *.mov
 *.MOV
 *.mp4
+
+# build output of the probe apps
+integrations/accelprobe/.gradle/
+integrations/accelprobe/build/
+integrations/feedprobe/.gradle/
+integrations/feedprobe/build/

@@ -9,8 +9,8 @@ What the code does today (23 Oct 2026), and what it does not claim.
 - **The captured face** (ISO 19794-5 with JPEG 2000) is converted to a PNG in memory for the Binding check and discarded. Storage of the biometric stays with the existing registration packet code.
 - **Audit log** (`REG-LIV-001..011`): append-only with a hash chain (an edit or deletion is detected). It refuses keys such as image, frame, embedding, biometric and user id, and values that are long or look base64. Scores are logged as bands (LOW, MID, HIGH), not raw values. The client writes its own audit events through `AuditManagerService` with the same rule: workflow and outcome only.
 - **Metrics** have no method that takes a string, so no identifier can be passed in.
-- **Diagnostic mode** is off by default, shown only to the operator when an admin enables it, carries a persistent DIAGNOSTIC MODE banner, and is always empty for packets.
-- **Retry counter** belongs to the session, not the process. An attempt oracle alert (5 PAD failures from one workstation within 10 minutes, TARGET) uses a hashed workstation key.
+- **Diagnostic mode** (implemented in the engine and in the desktop and Android panes; **not yet wired into either client's screens**) is off by default, shown only to the operator when an admin enables it, carries a persistent DIAGNOSTIC MODE banner, and is always empty for packets.
+- **Retry counter** belongs to the session, not the process. An attempt oracle alert (implemented in `AttemptOracleAlert` with tests, **not called by either client yet**; 5 PAD failures from one workstation within 10 minutes, TARGET) uses a hashed workstation key.
 
 ## Integrity and fail-closed behaviour
 

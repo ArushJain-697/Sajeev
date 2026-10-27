@@ -15,6 +15,6 @@
 | TD11 | Device integration interface | API.md#device |
 | TD12 | Liveness engine interface | API.md#engine |
 | TD13 | Error handling and recovery | DESIGN.md#errors |
-| TD14 | Sequence diagrams | SEQUENCES.md (desktop drawn; Android planned, not drawn) |
+| TD14 | Sequence diagrams | SEQUENCES.md (desktop and Android drawn, checked against the code by reading) |
 | TD15 | Security and privacy | SECURITY_PRIVACY.md |
 | TD16 | ISO/IEC 30107 alignment | ISO30107_ALIGNMENT.md |

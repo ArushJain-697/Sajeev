@@ -22,7 +22,7 @@ A face is stored only if the person was judged live **and** the captured face is
 ## Build and test
 ```
 scripts/fetch_models.sh                      # downloads the model files (about 40 MB), see liveness-models/README.md
-mvn -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=liveness-models/models
+mvn -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=$PWD/liveness-models/models
 bench/run.sh --clip testdata/fixtures-faces/one_face.jpg
 ```
 Without the models the tests that need them skip (and say so). Docs: `docs/` (start with `TD_INDEX.md`). Per-ticket status, limits and numbers: `BUILD_LOG.md`. The four MOSIP forks and how they are built from the patches: `integrations/README.md`.
