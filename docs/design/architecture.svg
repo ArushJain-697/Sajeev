@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-label="SAJEEV architecture: the capture device streams frames to the Registration Client, which feeds one offline liveness engine; the engine decides live, challenge or refuse, and binds the stored capture to the face seen live before anything is stored.">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1F2A37"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2E6DB4"/></marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B4690E"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1200" height="760" fill="#FFFFFF"/>
+  <g font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" fill="#1F2A37">
+
+    <!-- column panels -->
+    <rect x="24" y="40" width="220" height="560" rx="10" fill="#F7F9FB" stroke="#C9D1D9"/>
+    <rect x="284" y="40" width="260" height="560" rx="10" fill="#F7F9FB" stroke="#C9D1D9"/>
+    <rect x="584" y="40" width="420" height="640" rx="10" fill="#F7F9FB" stroke="#C9D1D9"/>
+    <text x="40" y="68" font-size="17" font-weight="700">Capture device (L0/L1)</text>
+    <text x="300" y="68" font-size="17" font-weight="700">Registration Client</text>
+    <text x="600" y="68" font-size="17" font-weight="700">liveness-core</text>
+    <text x="725" y="68" font-size="14" fill="#5B6672">same code on Desktop and Android, offline</text>
+
+    <!-- devices -->
+    <rect x="40" y="100" width="188" height="96" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="54" y="126" font-size="15" font-weight="700">Desktop SBI device</text>
+    <text x="54" y="150" font-size="14" fill="#5B6672">SBI 1.0 and 0.9.5</text>
+    <text x="54" y="172" font-size="14" fill="#5B6672">MockMDS in tests</text>
+
+    <rect x="40" y="380" width="188" height="96" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="54" y="406" font-size="15" font-weight="700">Android SBI app</text>
+    <text x="54" y="430" font-size="14" fill="#5B6672">frame feed (our proposal)</text>
+    <text x="54" y="452" font-size="14" fill="#5B6672">or the tablet camera</text>
+
+    <!-- clients -->
+    <rect x="300" y="100" width="228" height="176" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="314" y="126" font-size="15" font-weight="700">Desktop (JavaFX)</text>
+    <text x="314" y="150" font-size="14" fill="#5B6672">resident capture, login,</text>
+    <text x="314" y="170" font-size="14" fill="#5B6672">approval, onboarding,</text>
+    <text x="314" y="190" font-size="14" fill="#5B6672">exception photo</text>
+    <line x1="314" y1="206" x2="514" y2="206" stroke="#E1E6EB"/>
+    <text x="314" y="228" font-size="14">LivenessCaptureCoordinator</text>
+    <text x="314" y="250" font-size="14">registration-api SPI</text>
+
+    <rect x="300" y="380" width="228" height="176" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="314" y="406" font-size="15" font-weight="700">Android (Flutter + Java)</text>
+    <text x="314" y="430" font-size="14" fill="#5B6672">resident capture,</text>
+    <text x="314" y="450" font-size="14" fill="#5B6672">face login, face approval,</text>
+    <text x="314" y="470" font-size="14" fill="#5B6672">onboarding, exception photo</text>
+    <line x1="314" y1="486" x2="514" y2="486" stroke="#E1E6EB"/>
+    <text x="314" y="508" font-size="14">LivenessGate, Pigeon API</text>
+    <text x="314" y="530" font-size="14">AndroidLivenessController</text>
+
+    <!-- device to client -->
+    <line x1="228" y1="130" x2="298" y2="130" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="234" y="122" font-size="12" fill="#5B6672">frames</text>
+    <line x1="228" y1="174" x2="298" y2="174" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="234" y="166" font-size="12" fill="#5B6672">capture</text>
+    <line x1="228" y1="410" x2="298" y2="410" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="234" y="402" font-size="12" fill="#5B6672">frames</text>
+    <line x1="228" y1="454" x2="298" y2="454" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="234" y="446" font-size="12" fill="#5B6672">capture</text>
+    <text x="40" y="236" font-size="12" fill="#5B6672">frames: M-JPEG stream</text>
+    <text x="40" y="254" font-size="12" fill="#5B6672">capture: signed ISO 19794-5</text>
+
+    <!-- client to engine bus -->
+    <line x1="528" y1="188" x2="564" y2="188" stroke="#1F2A37" stroke-width="1.6"/>
+    <line x1="528" y1="468" x2="564" y2="468" stroke="#1F2A37" stroke-width="1.6"/>
+    <line x1="564" y1="188" x2="564" y2="468" stroke="#1F2A37" stroke-width="1.6"/>
+    <line x1="564" y1="138" x2="602" y2="138" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <line x1="564" y1="138" x2="564" y2="188" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="550" y="330" font-size="12" fill="#5B6672" text-anchor="middle" transform="rotate(-90 550 330)">frames in · prompts, verdict out</text>
+
+    <!-- engine pipeline -->
+    <rect x="604" y="96" width="180" height="84" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="618" y="122" font-size="15" font-weight="700">Frame Guard</text>
+    <text x="618" y="146" font-size="13" fill="#5B6672">fps, stalls, bad frames,</text>
+    <text x="618" y="164" font-size="13" fill="#5B6672">frozen picture</text>
+
+    <rect x="808" y="96" width="180" height="84" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="822" y="122" font-size="15" font-weight="700">Face and landmarks</text>
+    <text x="822" y="146" font-size="13" fill="#5B6672">one face, quality,</text>
+    <text x="822" y="164" font-size="13" fill="#5B6672">478-point mesh</text>
+    <line x1="784" y1="138" x2="806" y2="138" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <rect x="604" y="226" width="180" height="104" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="618" y="252" font-size="15" font-weight="700">Six voters</text>
+    <text x="618" y="276" font-size="13" fill="#5B6672">texture CNN, moiré,</text>
+    <text x="618" y="294" font-size="13" fill="#5B6672">flatness, frame edge,</text>
+    <text x="618" y="312" font-size="13" fill="#5B6672">reflection, eyelid motion</text>
+    <path d="M898,180 L898,204 L694,204 L694,224" fill="none" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <rect x="808" y="226" width="180" height="104" rx="6" fill="#FFFFFF" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="822" y="252" font-size="15" font-weight="700">Decision Gate</text>
+    <text x="822" y="276" font-size="13" fill="#5B6672">2 attack votes: refuse</text>
+    <text x="822" y="294" font-size="13" fill="#5B6672">evidence of life: pass</text>
+    <text x="822" y="312" font-size="13" fill="#5B6672">unsure: challenge</text>
+    <line x1="784" y1="278" x2="806" y2="278" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <rect x="604" y="376" width="180" height="104" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="618" y="402" font-size="15" font-weight="700">Challenge engine</text>
+    <text x="618" y="426" font-size="13" fill="#5B6672">random prompts, fit</text>
+    <text x="618" y="444" font-size="13" fill="#5B6672">to the camera’s fps;</text>
+    <text x="618" y="462" font-size="13" fill="#5B6672">voters keep running</text>
+    <path d="M840,330 L840,354 L694,354 L694,374" fill="none" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="702" y="348" font-size="12" fill="#5B6672">unsure</text>
+
+    <rect x="808" y="376" width="180" height="104" rx="6" fill="#FFFFFF" stroke="#2E6DB4" stroke-width="1.8"/>
+    <text x="822" y="402" font-size="15" font-weight="700">Binding</text>
+    <text x="822" y="426" font-size="13" fill="#5B6672">stored face = the one</text>
+    <text x="822" y="444" font-size="13" fill="#5B6672">face seen live: embedding,</text>
+    <text x="822" y="462" font-size="13" fill="#5B6672">geometry, timing</text>
+    <line x1="936" y1="330" x2="936" y2="374" stroke="#2E6DB4" stroke-width="1.8" marker-end="url(#ab)"/>
+    <text x="944" y="358" font-size="12" fill="#2E6DB4">live</text>
+    <line x1="784" y1="428" x2="806" y2="428" stroke="#2E6DB4" stroke-width="1.8" marker-end="url(#ab)"/>
+
+    <!-- engine services -->
+    <rect x="604" y="520" width="120" height="64" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="616" y="546" font-size="14" font-weight="700">Policy, config</text>
+    <text x="616" y="566" font-size="12" fill="#5B6672">per workflow</text>
+    <rect x="736" y="520" width="120" height="64" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="748" y="546" font-size="14" font-weight="700">Audit, metrics</text>
+    <text x="748" y="566" font-size="12" fill="#5B6672">no images kept</text>
+    <rect x="868" y="520" width="120" height="64" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="880" y="546" font-size="14" font-weight="700">Signed models</text>
+    <text x="880" y="566" font-size="12" fill="#5B6672">checked on load</text>
+    <text x="604" y="620" font-size="13" fill="#5B6672">No network calls. An error, a missing model or a timeout is never a pass.</text>
+    <text x="604" y="640" font-size="13" fill="#5B6672">Operators and supervisors always get the challenge.</text>
+
+    <!-- outcomes -->
+    <rect x="1032" y="376" width="148" height="104" rx="6" fill="#EAF1F9" stroke="#2E6DB4" stroke-width="1.8"/>
+    <text x="1046" y="406" font-size="15" font-weight="700" fill="#1F4F86">Store capture</text>
+    <text x="1046" y="428" font-size="13" fill="#1F4F86">or grant login,</text>
+    <text x="1046" y="448" font-size="13" fill="#1F4F86">approval</text>
+    <line x1="988" y1="428" x2="1030" y2="428" stroke="#2E6DB4" stroke-width="1.8" marker-end="url(#ab)"/>
+    <text x="992" y="420" font-size="12" fill="#2E6DB4">bound</text>
+
+    <rect x="1032" y="96" width="148" height="104" rx="6" fill="#FBF1E4" stroke="#B4690E" stroke-width="1.8"/>
+    <text x="1046" y="126" font-size="15" font-weight="700" fill="#7A4508">Refuse</text>
+    <text x="1046" y="148" font-size="13" fill="#7A4508">PS4 message, then</text>
+    <text x="1046" y="168" font-size="13" fill="#7A4508">retry or recovery</text>
+    <path d="M988,248 L1010,248 L1010,160 L1030,160" fill="none" stroke="#B4690E" stroke-width="1.8" marker-end="url(#aa)"/>
+    <text x="1016" y="236" font-size="12" fill="#B4690E">attack</text>
+    <path d="M694,480 L694,500 L1192,500 L1192,150 L1182,150" fill="none" stroke="#B4690E" stroke-width="1.8" marker-end="url(#aa)"/>
+    <line x1="936" y1="480" x2="936" y2="500" stroke="#B4690E" stroke-width="1.8"/>
+    <text x="1030" y="494" font-size="12" fill="#B4690E">timeout or unbound</text>
+
+    <!-- MOSIP server -->
+    <rect x="284" y="640" width="260" height="84" rx="10" fill="#FFFFFF" stroke="#5B6672" stroke-dasharray="6 5"/>
+    <text x="300" y="668" font-size="15" font-weight="700">MOSIP server</text>
+    <text x="300" y="692" font-size="13" fill="#5B6672">settings and model updates,</text>
+    <text x="300" y="710" font-size="13" fill="#5B6672">synced only when online</text>
+    <line x1="414" y1="638" x2="414" y2="602" stroke="#5B6672" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#a)"/>
+  </g>
+</svg>

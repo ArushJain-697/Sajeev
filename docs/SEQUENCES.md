@@ -2,7 +2,9 @@
 
 Desktop sequences match the code in patch 0005. Android sequences (resident capture, operator face login, supervisor approval) describe the code in patches 0006 and 0007; none of these flows was run against a MOSIP server.
 
-## Resident {#resident} (desktop)
+<a id="resident"></a>
+
+## Resident (desktop)
 
 ```mermaid
 sequenceDiagram
@@ -34,7 +36,9 @@ sequenceDiagram
   end
 ```
 
-## Operator {#operator} (desktop)
+<a id="operator"></a>
+
+## Operator (desktop)
 
 ```mermaid
 sequenceDiagram
@@ -57,11 +61,15 @@ sequenceDiagram
   Note over B,M: any refusal returns false before the match
 ```
 
-## Supervisor {#supervisor} (desktop)
+<a id="supervisor"></a>
+
+## Supervisor (desktop)
 
 Same as operator with `begin(SUPERVISOR)`, used by the reviewer path of `AuthenticationController` and by `EODAuthenticationController`. The "supervisor physically present" wording: the check shows that a live person was in front of the camera; it does not prove who that person is, the existing face match does.
 
-## Android resident {#android-resident}
+<a id="android-resident"></a>
+
+## Android resident
 
 Matches `LivenessGate`, `LivenessApi`, `AndroidLivenessController` and `BiometricsDetailsApi.parseRCaptureResponse` (patch 0006). Not run on a screen.
 
@@ -99,7 +107,9 @@ sequenceDiagram
   end
 ```
 
-## Android operator login by face {#android-operator}
+<a id="android-operator"></a>
+
+## Android operator login by face
 
 Matches `FaceAuthFlow`, `BiometricsDetailsApi.parseFaceAuthResponse`, `FaceAuthCheck`, `FaceAuthTicket` and `AuthenticationApi.loginWithFace`. Offline session only; needs `faceAuth.enabled = true`.
 
@@ -130,6 +140,8 @@ sequenceDiagram
   end
 ```
 
-## Android supervisor approval {#android-supervisor}
+<a id="android-supervisor"></a>
+
+## Android supervisor approval
 
 Same as the operator login with `verify(user, SUPERVISOR)` from the approval dialog, and `PacketAuthenticationApi.authenticateWithFace(user)` spending the ticket instead of `loginWithFace`. The same dialog is used for the operator's post-registration authentication when the password is left empty (workflow OPERATOR).

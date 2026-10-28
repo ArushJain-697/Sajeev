@@ -4,7 +4,9 @@ How SAJEEV decides. Everything here describes code that exists in `liveness-core
 
 Principle: **seen live, then stored.** A face is stored only if the person was judged live AND the stored capture is the face seen live.
 
-## Decision flow {#decision}
+<a id="decision"></a>
+
+## Decision flow
 
 1. **Frame Guard** checks the stream (rate, bad frames, stalls). Below the configured minimum fps the result is a device-inadequate guidance, never a pass.
 2. **Face tracker** needs exactly one usable face (size, brightness, sharpness). Otherwise the person gets guidance (`FACE_NOT_DETECTED`, `MULTIPLE_FACES`, `POOR_QUALITY`); this does not use up a retry.
@@ -36,7 +38,9 @@ The "counted at 0.5" clause (decision D46) exists because a property test found 
 
 Safety laws, tested as properties over 10,000 generated cases each plus a mutation table (BUILD_LOG #31): **I1** no orphan capture, **I2** less evidence never helps, **I3** a veto wins.
 
-## Challenges {#challenges}
+<a id="challenges"></a>
+
+## Challenges
 
 - Ten types: blink, smile, turn left, turn right, look left, look right, look up, look down, close eyes and hold, open mouth.
 - Drawn with `SecureRandom` per attempt: `active.minChallenges` (2) distinct types in random order; every retry draws a new sequence. The person never picks.
@@ -44,7 +48,9 @@ Safety laws, tested as properties over 10,000 generated cases each plus a mutati
 - A challenge counts only on frames after the prompt (one-frame guard), within `active.challengeTimeoutMs` (5000).
 - Gaze and closed-eye detectors are validated on synthetic images only so far.
 
-## Errors and recovery {#errors}
+<a id="errors"></a>
+
+## Errors and recovery
 
 | ErrorState | When | Person sees (English) | Retry used? |
 |---|---|---|---|

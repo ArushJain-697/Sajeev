@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" width="1200" height="860" role="img" aria-label="Wireframes of the liveness pane: an annotated capture screen and its four states, checking, challenge, not verified with hints and retry, and limit reached with the recovery process. The same layout is used on Desktop and Android.">
+  <defs>
+    <marker id="d" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5"><circle cx="5" cy="5" r="4" fill="#5B6672"/></marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2E6DB4"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1200" height="860" fill="#FFFFFF"/>
+  <g font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" fill="#1F2A37">
+
+    <text x="40" y="44" font-size="17" font-weight="700">The liveness pane</text>
+    <text x="40" y="66" font-size="13" fill="#5B6672">one layout for resident, operator and supervisor, on Desktop and Android</text>
+
+    <!-- anatomy frame -->
+    <rect x="40" y="90" width="340" height="600" rx="10" fill="#FFFFFF" stroke="#1F2A37" stroke-width="1.6"/>
+    <rect x="64" y="112" width="200" height="18" rx="4" fill="#D5DBE1"/>
+    <text x="64" y="160" font-size="15" font-weight="700">Resident face capture</text>
+    <rect x="64" y="176" width="96" height="26" rx="13" fill="#EEF1F4" stroke="#9AA5B1"/>
+    <text x="112" y="194" font-size="13" text-anchor="middle">Checking</text>
+    <rect x="168" y="176" width="70" height="26" rx="13" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="203" y="194" font-size="12" fill="#5B6672" text-anchor="middle">Offline</text>
+    <rect x="64" y="218" width="292" height="252" rx="6" fill="#EEF1F4" stroke="#9AA5B1"/>
+    <line x1="64" y1="218" x2="356" y2="470" stroke="#D5DBE1"/>
+    <line x1="356" y1="218" x2="64" y2="470" stroke="#D5DBE1"/>
+    <ellipse cx="210" cy="344" rx="78" ry="104" fill="#FFFFFF" fill-opacity="0.6" stroke="#2E6DB4" stroke-width="3"/>
+    <line x1="236" y1="344" x2="186" y2="344" stroke="#2E6DB4" stroke-width="3" marker-end="url(#ar)"/>
+    <circle cx="188" cy="492" r="7" fill="#2E6DB4"/>
+    <circle cx="210" cy="492" r="7" fill="#FFFFFF" stroke="#2E6DB4" stroke-width="2"/>
+    <circle cx="232" cy="492" r="7" fill="#FFFFFF" stroke="#2E6DB4" stroke-width="2"/>
+    <text x="210" y="530" font-size="16" font-weight="700" text-anchor="middle">Please turn your head to the left</text>
+    <text x="210" y="556" font-size="13" fill="#5B6672" text-anchor="middle">Keep your face within the capture area.</text>
+    <text x="210" y="586" font-size="13" fill="#5B6672" text-anchor="middle">Attempt 1 of 3</text>
+    <rect x="130" y="610" width="160" height="40" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="210" y="635" font-size="14" text-anchor="middle">Try again</text>
+
+    <!-- callouts -->
+    <g font-size="13" fill="#5B6672">
+      <line x1="244" y1="160" x2="400" y2="150" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="146" font-weight="700" fill="#1F2A37">Workflow title</text>
+      <text x="406" y="164">resident, operator or supervisor</text>
+      <line x1="240" y1="189" x2="400" y2="214" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="210" font-weight="700" fill="#1F2A37">Status in words, and connection</text>
+      <text x="406" y="228">checking, challenge, not verified;</text>
+      <text x="406" y="246">online or offline works the same</text>
+      <line x1="288" y1="300" x2="400" y2="300" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="296" font-weight="700" fill="#1F2A37">Live preview, mirrored</text>
+      <text x="406" y="314">the oval shows where the face belongs</text>
+      <line x1="200" y1="344" x2="400" y2="356" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="352" font-weight="700" fill="#1F2A37">Direction cue</text>
+      <text x="406" y="370">left means the person’s own left</text>
+      <line x1="240" y1="492" x2="400" y2="420" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="416" font-weight="700" fill="#1F2A37">Progress</text>
+      <text x="406" y="434">one mark per prompt, filled when done</text>
+      <line x1="356" y1="530" x2="400" y2="484" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="480" font-weight="700" fill="#1F2A37">Prompt, then feedback</text>
+      <text x="406" y="498">chosen by the system, also read aloud</text>
+      <line x1="336" y1="556" x2="400" y2="546" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="542" font-weight="700" fill="#1F2A37">One hint at a time</text>
+      <text x="406" y="560">light, distance, one person</text>
+      <line x1="252" y1="586" x2="400" y2="600" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="596" font-weight="700" fill="#1F2A37">Attempts left</text>
+      <text x="406" y="614">from the retry limit in the settings</text>
+      <line x1="290" y1="630" x2="400" y2="652" stroke="#9AA5B1" marker-start="url(#d)"/>
+      <text x="406" y="648" font-weight="700" fill="#1F2A37">One action</text>
+      <text x="406" y="666">only when a retry is possible</text>
+    </g>
+
+    <!-- states -->
+    <text x="700" y="44" font-size="17" font-weight="700">Its four states</text>
+    <text x="700" y="66" font-size="13" fill="#5B6672">PS4 wording; scores and voter names never shown</text>
+
+    <g>
+      <rect x="700" y="90" width="220" height="290" rx="8" fill="#FFFFFF" stroke="#9AA5B1"/>
+      <rect x="716" y="106" width="70" height="20" rx="10" fill="#EEF1F4" stroke="#9AA5B1"/>
+      <text x="751" y="120" font-size="11" text-anchor="middle">Checking</text>
+      <rect x="716" y="136" width="188" height="150" rx="4" fill="#EEF1F4"/>
+      <ellipse cx="810" cy="211" rx="46" ry="62" fill="none" stroke="#2E6DB4" stroke-width="2.5"/>
+      <text x="810" y="312" font-size="13" font-weight="700" text-anchor="middle">Checking face liveness…</text>
+      <text x="810" y="334" font-size="12" fill="#5B6672" text-anchor="middle">no action needed</text>
+      <text x="810" y="402" font-size="13" font-weight="700" text-anchor="middle">Checking</text>
+    </g>
+
+    <g>
+      <rect x="940" y="90" width="220" height="290" rx="8" fill="#FFFFFF" stroke="#9AA5B1"/>
+      <rect x="956" y="106" width="78" height="20" rx="10" fill="#EAF1F9" stroke="#2E6DB4"/>
+      <text x="995" y="120" font-size="11" fill="#1F4F86" text-anchor="middle">Challenge</text>
+      <rect x="956" y="136" width="188" height="150" rx="4" fill="#EEF1F4"/>
+      <ellipse cx="1050" cy="211" rx="46" ry="62" fill="none" stroke="#2E6DB4" stroke-width="2.5"/>
+      <line x1="1066" y1="211" x2="1034" y2="211" stroke="#2E6DB4" stroke-width="2.5" marker-end="url(#ar)"/>
+      <text x="1050" y="312" font-size="13" font-weight="700" text-anchor="middle">Please turn your head</text>
+      <text x="1050" y="330" font-size="13" font-weight="700" text-anchor="middle">to the left</text>
+      <text x="1050" y="352" font-size="12" fill="#5B6672" text-anchor="middle">then “Action detected”</text>
+      <text x="1050" y="402" font-size="13" font-weight="700" text-anchor="middle">Challenge</text>
+    </g>
+
+    <g>
+      <rect x="700" y="440" width="220" height="290" rx="8" fill="#FFFFFF" stroke="#B4690E"/>
+      <rect x="716" y="456" width="94" height="20" rx="10" fill="#FBF1E4" stroke="#B4690E"/>
+      <text x="763" y="470" font-size="11" fill="#7A4508" text-anchor="middle">Not verified</text>
+      <rect x="716" y="486" width="188" height="96" rx="4" fill="#EEF1F4"/>
+      <text x="810" y="606" font-size="12" font-weight="700" text-anchor="middle">We could not verify face</text>
+      <text x="810" y="622" font-size="12" font-weight="700" text-anchor="middle">liveness. Please try again.</text>
+      <text x="810" y="644" font-size="11" fill="#5B6672" text-anchor="middle">Improve lighting.</text>
+      <text x="810" y="660" font-size="11" fill="#5B6672" text-anchor="middle">Attempt 2 of 3</text>
+      <rect x="760" y="676" width="100" height="30" rx="5" fill="#FFFFFF" stroke="#9AA5B1"/>
+      <text x="810" y="696" font-size="12" text-anchor="middle">Try again</text>
+      <text x="810" y="752" font-size="13" font-weight="700" text-anchor="middle">Not verified, retry</text>
+      <text x="810" y="770" font-size="12" fill="#5B6672" text-anchor="middle">an attack shows the generic message</text>
+    </g>
+
+    <g>
+      <rect x="940" y="440" width="220" height="290" rx="8" fill="#FFFFFF" stroke="#B4690E"/>
+      <rect x="956" y="456" width="74" height="20" rx="10" fill="#FBF1E4" stroke="#B4690E"/>
+      <text x="993" y="470" font-size="11" fill="#7A4508" text-anchor="middle">Stopped</text>
+      <rect x="956" y="486" width="188" height="96" rx="4" fill="#EEF1F4"/>
+      <text x="1050" y="606" font-size="12" font-weight="700" text-anchor="middle">Face verification could</text>
+      <text x="1050" y="622" font-size="12" font-weight="700" text-anchor="middle">not be completed.</text>
+      <text x="1050" y="644" font-size="11" fill="#5B6672" text-anchor="middle">Please follow the recovery</text>
+      <text x="1050" y="660" font-size="11" fill="#5B6672" text-anchor="middle">process.</text>
+      <text x="1050" y="752" font-size="13" font-weight="700" text-anchor="middle">Limit reached</text>
+      <text x="1050" y="770" font-size="12" fill="#5B6672" text-anchor="middle">no retry button, audited</text>
+    </g>
+
+    <text x="40" y="740" font-size="13" fill="#5B6672">Arabic mirrors the layout right to left. Colour is never the only signal: every state also says its name.</text>
+    <text x="40" y="760" font-size="13" fill="#5B6672">High-fidelity screens for every state, in English, French and Arabic: docs/UIUX/desktop and docs/UIUX/android.</text>
+  </g>
+</svg>

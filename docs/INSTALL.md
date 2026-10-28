@@ -8,7 +8,7 @@ scripts/fetch_models.sh        # downloads the signed model files (about 40 MB) 
 mvn -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=$PWD/liveness-models/models
 bench/run.sh --clip testdata/fixtures-faces/one_face.jpg --models $PWD/liveness-models/models
 ```
-A clean clone with these three commands ran 218 tests with 0 failures on 24 Oct (5 skip without a running MockMDS); on 28 Oct the suite has 274 tests. Recorded clips are evaluated with `eval/ingest.sh` and `eval/run_eval.sh` (see `eval/RECORDING_PROTOCOL.md`); `eval/tools/robustness_matrix.sh` replays every clip at several resolutions and frame rates.
+A clean clone with these three commands ran 218 tests with 0 failures on 24 Oct (5 skip without a running MockMDS); on 28 Oct the suite has 276 tests, 271 passed, 0 failed, 5 skipped ([TEST_RESULTS.md](TEST_RESULTS.md)). Recorded clips are evaluated with `eval/ingest.sh` and `eval/run_eval.sh` (see `eval/RECORDING_PROTOCOL.md`); `eval/tools/robustness_matrix.sh` replays every clip at several resolutions and frame rates.
 
 ## Needs
 - JDK 17 to build (the engine is compiled for Java 11 with `--release 11`; the desktop client patches build with JDK 11), Maven 3.9.

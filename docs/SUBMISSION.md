@@ -13,7 +13,7 @@ Today the Desktop and Android Registration Clients accept any face the camera se
 - **Policy per workflow:** residents use the PS4 hybrid flow; operators and supervisors always get the challenge (`ACTIVE_ALWAYS`) with three challenges. Thresholds, pools, counts, timeouts, retries and behaviour on repeated failure are configurable from each client's configuration.
 - **Client integrations** (as forks with pull requests): Desktop (resident capture, operator login and authentication, supervisor/EOD approval, operator onboarding, exception photo) and Android (resident capture, new operator face login and supervisor face approval, onboarding, exception photo), with the PS4 messages in six languages, retry limits, lockout and audit events.
 - **Mock devices** for development and tests: a frame-feed service for MOSIP's mock Android SBI and a replay mode for MockMDS.
-- **Evidence tooling:** a reproducible evaluation harness (APCER/BPCER with Wilson intervals, ISO/IEC 30107-3 style), a sealed held-out gate, a robustness matrix, replay and fuzz harnesses, an interoperability harness, 274 automated tests.
+- **Evidence tooling:** a reproducible evaluation harness (APCER/BPCER with Wilson intervals, ISO/IEC 30107-3 style), a sealed held-out gate, a robustness matrix, replay and fuzz harnesses, an interoperability harness, 276 automated engine tests (0 failures) and 91 more in the client patches.
 
 ## What we measured (one person, one room, one webcam: behaviour, not rates)
 - **Real clips of the person:** 57 of 64 presentations (2 clips x 8 camera settings) passed passively; the rest went to the challenge.
@@ -26,7 +26,7 @@ Today the Desktop and Android Registration Clients accept any face the camera se
 No printed-photo attack has been recorded; data comes from one person; no APCER/BPCER should be quoted. Neither client was run end to end against a MOSIP server (machine registration was not done). The MiniFASNet weights have no stated licence. Hindi, Kannada and Tamil texts are machine translations. Not tested: 3D masks, injected video, a live attacker who reacts to the prompt.
 
 ## Run it
-`scripts/fetch_models.sh`, then `mvn -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=$PWD/liveness-models/models`, then `bench/run.sh --clip <frames or clip>`. Details: `docs/INSTALL.md`; design: `docs/TD_INDEX.md` (TD1 to TD16); UI states: `docs/UIUX/`; tests: `docs/TEST_CASES.md`.
+`scripts/fetch_models.sh`, then `mvn -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=$PWD/liveness-models/models`, then `bench/run.sh --clip <frames or clip>`. Step by step: `README.md`; client patches: `docs/INSTALL.md`; architecture, user flows and wireframes: `docs/design/`; API: `docs/API.md`; design: `docs/TD_INDEX.md` (TD1 to TD16); UI states: `docs/UIUX/`; test data: `docs/TEST_DATA.md`; tests and results: `docs/TEST_CASES.md`, `docs/TEST_RESULTS.md`.
 
 ## Links
 - Engine, docs, evaluation: https://github.com/ArushJain-697/Sajeev

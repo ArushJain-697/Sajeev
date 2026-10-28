@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1040" width="1200" height="1040" role="img" aria-label="Operator and supervisor face authentication flow on both clients: liveness always runs first with three random prompts, the capture must be the face seen live, then the existing MOSIP face match runs against the onboarded face; any failure refuses, with the password path kept when configured.">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1F2A37"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2E6DB4"/></marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B4690E"/></marker>
+  </defs>
+  <rect x="0" y="0" width="1200" height="1040" fill="#FFFFFF"/>
+  <g font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" fill="#1F2A37">
+
+    <!-- two entry points -->
+    <rect x="40" y="30" width="250" height="56" rx="28" fill="#F7F9FB" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="165" y="54" font-size="15" font-weight="700" text-anchor="middle">Operator signs in</text>
+    <text x="165" y="74" font-size="13" fill="#5B6672" text-anchor="middle">or authenticates a packet</text>
+    <rect x="370" y="30" width="250" height="56" rx="28" fill="#F7F9FB" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="495" y="54" font-size="15" font-weight="700" text-anchor="middle">Supervisor approves</text>
+    <text x="495" y="74" font-size="13" fill="#5B6672" text-anchor="middle">packets or end of day</text>
+    <path d="M165,86 L165,106 L330,106 L330,124" fill="none" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <path d="M495,86 L495,106 L330,106" fill="none" stroke="#1F2A37" stroke-width="1.6"/>
+
+    <!-- always challenge -->
+    <rect x="180" y="126" width="300" height="70" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="330" y="154" font-size="15" font-weight="700" text-anchor="middle">Liveness runs first, always</text>
+    <text x="330" y="178" font-size="13" fill="#5B6672" text-anchor="middle">the passive check can only refuse</text>
+    <line x1="330" y1="196" x2="330" y2="222" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <polygon points="330,224 440,272 330,320 220,272" fill="#FFFFFF" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="330" y="268" font-size="14" font-weight="700" text-anchor="middle">Two attack</text>
+    <text x="330" y="286" font-size="14" font-weight="700" text-anchor="middle">votes?</text>
+    <path d="M440,272 L1025,272 L1025,568" fill="none" stroke="#B4690E" stroke-width="1.8" marker-end="url(#aa)"/>
+    <text x="454" y="264" font-size="13" fill="#B4690E">yes</text>
+    <line x1="330" y1="320" x2="330" y2="350" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="340" y="340" font-size="13" fill="#5B6672">no</text>
+
+    <rect x="180" y="352" width="300" height="72" rx="6" fill="#FFFFFF" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="330" y="378" font-size="15" font-weight="700" text-anchor="middle">Three random prompts</text>
+    <text x="330" y="400" font-size="13" fill="#5B6672" text-anchor="middle">for example: turn right, look up,</text>
+    <text x="330" y="416" font-size="13" fill="#5B6672" text-anchor="middle">open your mouth</text>
+    <line x1="330" y1="424" x2="330" y2="450" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <polygon points="330,452 440,500 330,548 220,500" fill="#FFFFFF" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="330" y="496" font-size="14" font-weight="700" text-anchor="middle">All done in time,</text>
+    <text x="330" y="514" font-size="14" font-weight="700" text-anchor="middle">no attack?</text>
+    <path d="M440,500 L960,500 L960,568" fill="none" stroke="#B4690E" stroke-width="1.8" marker-end="url(#aa)"/>
+    <text x="454" y="492" font-size="13" fill="#B4690E">no</text>
+    <line x1="330" y1="548" x2="330" y2="578" stroke="#2E6DB4" stroke-width="1.8" marker-end="url(#ab)"/>
+    <text x="340" y="568" font-size="13" fill="#2E6DB4">yes</text>
+
+    <rect x="180" y="580" width="300" height="64" rx="6" fill="#FFFFFF" stroke="#9AA5B1"/>
+    <text x="330" y="606" font-size="15" font-weight="700" text-anchor="middle">Device takes the photo</text>
+    <text x="330" y="628" font-size="13" fill="#5B6672" text-anchor="middle">signed capture</text>
+    <line x1="330" y1="644" x2="330" y2="670" stroke="#1F2A37" stroke-width="1.6" marker-end="url(#a)"/>
+
+    <polygon points="330,672 440,720 330,768 220,720" fill="#FFFFFF" stroke="#2E6DB4" stroke-width="1.8"/>
+    <text x="330" y="716" font-size="14" font-weight="700" text-anchor="middle">Same face</text>
+    <text x="330" y="734" font-size="14" font-weight="700" text-anchor="middle">as seen live?</text>
+    <path d="M440,720 L860,720 L860,680 L878,680" fill="none" stroke="#B4690E" stroke-width="1.8" marker-end="url(#aa)"/>
+    <text x="454" y="712" font-size="13" fill="#B4690E">no</text>
+    <line x1="330" y1="768" x2="330" y2="798" stroke="#2E6DB4" stroke-width="1.8" marker-end="url(#ab)"/>
+    <text x="340" y="788" font-size="13" fill="#2E6DB4">yes</text>
+
+    <polygon points="330,800 440,848 330,896 220,848" fill="#FFFFFF" stroke="#1F2A37" stroke-width="1.6"/>
+    <text x="330" y="844" font-size="14" font-weight="700" text-anchor="middle">Matches the</text>
+    <text x="330" y="862" font-size="14" font-weight="700" text-anchor="middle">onboarded face?</text>
+    <path d="M440,848 L860,848 L860,720" fill="none" stroke="#B4690E" stroke-width="1.8"/>
+    <text x="454" y="840" font-size="13" fill="#B4690E">no</text>
+    <text x="458" y="878" font-size="13" fill="#5B6672">MOSIP’s existing matcher, works offline</text>
+    <line x1="330" y1="896" x2="330" y2="926" stroke="#2E6DB4" stroke-width="1.8" marker-end="url(#ab)"/>
+    <text x="340" y="916" font-size="13" fill="#2E6DB4">yes</text>
+
+    <rect x="180" y="928" width="300" height="60" rx="30" fill="#EAF1F9" stroke="#2E6DB4" stroke-width="1.8"/>
+    <text x="330" y="954" font-size="15" font-weight="700" fill="#1F4F86" text-anchor="middle">Signed in or approved</text>
+    <text x="330" y="974" font-size="13" fill="#1F4F86" text-anchor="middle">one live check covers one use</text>
+
+    <!-- failure -->
+    <rect x="880" y="570" width="290" height="124" rx="6" fill="#FBF1E4" stroke="#B4690E" stroke-width="1.8"/>
+    <text x="894" y="596" font-size="15" font-weight="700" fill="#7A4508">Not authenticated</text>
+    <text x="894" y="620" font-size="13" fill="#7A4508">“Face verification could not be</text>
+    <text x="894" y="638" font-size="13" fill="#7A4508">completed. Please try again.”</text>
+    <text x="894" y="662" font-size="13" fill="#7A4508">Password sign-in stays available</text>
+    <text x="894" y="680" font-size="13" fill="#7A4508">when the settings allow it.</text>
+
+    <line x1="1110" y1="694" x2="1110" y2="760" stroke="#B4690E" stroke-width="1.8" marker-end="url(#aa)"/>
+    <text x="1040" y="740" font-size="13" fill="#B4690E" text-anchor="end">limit reached</text>
+    <rect x="880" y="762" width="290" height="64" rx="30" fill="#FBF1E4" stroke="#B4690E" stroke-width="1.8"/>
+    <text x="1025" y="788" font-size="15" font-weight="700" fill="#7A4508" text-anchor="middle">Face sign-in locked</text>
+    <text x="1025" y="810" font-size="13" fill="#7A4508" text-anchor="middle">5 minutes on Android, audited</text>
+
+    <text x="620" y="990" font-size="13" fill="#5B6672">Operator onboarding and the exception photo use the capture flow, so</text>
+    <text x="620" y="1010" font-size="13" fill="#5B6672">a photo can never become someone’s reference face.</text>
+  </g>
+</svg>
