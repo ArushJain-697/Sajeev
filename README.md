@@ -4,7 +4,7 @@
 
 A face is stored only if the person was judged live **and** the captured face is the face that was seen live.
 
-## What exists (24 Oct 2026)
+## What exists (28 Oct 2026)
 - **Engine** (`liveness-core`, Java 11, also runs on Android): six voters (texture CNN, moiré, flatness, frame edge, reflection, eyelid motion), a deterministic Decision Gate that counts only voters with positive evidence of life (texture, flatness, eyelid motion) towards a passive pass, ten randomised challenges with re-evaluation (all voters keep running during a challenge), Binding (one face, embedding, geometry, timing), policy, audit, metrics. The safety laws are tested as properties and by mutation (`BUILD_LOG.md` #31). Settings follow the client's configuration, per workflow (resident, operator, supervisor).
 - **Devices** (`devices`): SBI 1.0 and 0.9.5 adapters tested against MOSIP's mock devices; Android frame-feed, capture-only (labelled LIMITED) and CameraX sources.
 - **Desktop client** (patches `0001`, `0005`; fork branch `sajeev/release-1.2.0.x`): resident capture, operator and supervisor face checks, configuration, English/French/Arabic texts, audit. Built and unit-tested with JDK 11. **Never run on a screen.**
@@ -13,7 +13,8 @@ A face is stored only if the person was judged live **and** the captured face is
 - **Bench** (`bench/run.sh`), **evaluation harness** (`eval/`: APCER/BPCER with Wilson intervals, baselines, sealed held-out run), **interoperability harness** (`interop/`).
 
 ## What does not exist yet (read this first)
-- **Almost no recordings.** Real data so far: 2 clips of one person in one room (a first run found and fixed three bugs, `BUILD_LOG.md`, 25 Oct). **No recording of a real attack exists.** Every attack result is synthetic or a still photo, and a digitally edited photo is NOT rejected (it has no print or screen texture). No APCER or BPCER number exists and none should be quoted. All thresholds are starting values, not tuned.
+- **Very little real data.** One person, one room, one webcam: 2 bona fide clips and 4 attack clips (a phone showing a photo, a phone playing a video, three times). No printed-photo attack has been recorded. The numbers in `BUILD_LOG.md` (28 Oct robustness matrix) show behaviour, not rates to quote. All thresholds are starting values, not tuned.
+- **Known weakness, measured:** in the resident flow (HYBRID, as in the PS4 flow) a **video of the person played on a phone passed the passive gate in 6 of 24 presentations**: a video shows a real moving head and real eyelids, so the motion-based voters are fooled, and the texture CNN is not stable across frame rates and compression. Operators and supervisors always get the active challenge (`ACTIVE_ALWAYS`); setting `policy.mode.resident=ACTIVE_ALWAYS` closes the path for residents too. The challenge itself was passed by chance by about 2% to 5% of replays of a recording that does not see the prompt.
 - No real phone, no Windows machine, no MOSIP server login: neither client was run end to end. The Android settings, the frame-rate behaviour and the screens were checked by unit tests, an emulator and compile.
 - Hindi, Kannada and Tamil texts are **machine translations** written for this project and not reviewed by native speakers; French and Arabic are unreviewed drafts.
 - The MiniFASNet weights have no stated licence; the MediaPipe model card terms are unchecked (`DISCLOSURES.md`). The signing key is a development key.
