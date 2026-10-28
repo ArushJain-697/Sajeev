@@ -1,10 +1,18 @@
 # Install and run
 
-State on 23 Oct 2026. Everything below was run on one Apple-silicon Mac; nothing was run on Windows or a real phone.
+State on 28 Oct 2026. Everything below was run on one Apple-silicon Mac; nothing was run on Windows or a real phone.
+
+## Quick start (engine, bench, evaluation)
+```
+scripts/fetch_models.sh        # downloads the signed model files (about 40 MB) from the GitHub release models-0.1.0
+mvn -pl liveness-api,liveness-core,devices,bench,eval test -Dsajeev.models=$PWD/liveness-models/models
+bench/run.sh --clip testdata/fixtures-faces/one_face.jpg --models $PWD/liveness-models/models
+```
+A clean clone with these three commands ran 218 tests with 0 failures on 24 Oct (5 skip without a running MockMDS); on 28 Oct the suite has 274 tests. Recorded clips are evaluated with `eval/ingest.sh` and `eval/run_eval.sh` (see `eval/RECORDING_PROTOCOL.md`); `eval/tools/robustness_matrix.sh` replays every clip at several resolutions and frame rates.
 
 ## Needs
 - JDK 17 to build (the engine is compiled for Java 11 with `--release 11`; the desktop client patches build with JDK 11), Maven 3.9.
-- Model files, kept outside git: `yunet/face_detection_yunet_2023mar.onnx`, `landmark/face_landmarks_detector.onnx`, `minifasnet/2.7_80x80_MiniFASNetV2.onnx` and `4_0_0_80x80_MiniFASNetV1SE.onnx` (each with its `.onnx.data` file), `sface/face_recognition_sface_2021dec.onnx`. Sources and licences: `DISCLOSURES.md` (the MiniFASNet weights licence is unverified).
+- Model files, kept outside git and downloaded by `scripts/fetch_models.sh` (SHA-256 pinned, then verified against the signed manifest): `yunet/face_detection_yunet_2023mar.onnx`, `landmark/face_landmarks_detector.onnx`, `minifasnet/2.7_80x80_MiniFASNetV2.onnx` and `4_0_0_80x80_MiniFASNetV1SE.onnx` (each with its `.onnx.data` file), `sface/face_recognition_sface_2021dec.onnx`. Sources and licences: `DISCLOSURES.md` (the MiniFASNet weights licence is unverified).
 - For the Android parts: Android SDK, Gradle 8.5, Flutter 3.10.4, an emulator (Android 13 arm64 was used). For the desktop client patches: a checkout of `registration-client` `release-1.2.0.x` at c1cc4e7.
 
 ## Signing the models
